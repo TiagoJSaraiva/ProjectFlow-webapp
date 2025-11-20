@@ -1,0 +1,30 @@
+<div class="login-wrapper">
+  <div class="login-card">
+    <h1>Bem-vindo ao ProjectFlow</h1>
+    <p class="subtitle">Entre com sua conta para acessar seus projetos.</p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label>
+        Email
+        <input type="email" formControlName="email" placeholder="voce@email.com" />
+      </label>
+      <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
+        Informe um email válido.
+      </div>
+
+      <label>
+        Senha
+        <input type="password" formControlName="senha" placeholder="••••••••" />
+      </label>
+      <div class="field-error" *ngIf="form.controls.senha.touched && form.controls.senha.invalid">
+        A senha é obrigatória.
+      </div>
+
+      <button type="submit" [disabled]="isSubmitting">
+        {{ isSubmitting ? 'Entrando...' : 'Entrar' }}
+      </button>
+
+      <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,6 @@
+<svg width="80" height="40" viewBox="0 0 80 40" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="20" height="20" rx="4" stroke="#FFD500" fill="none" stroke-width="3"/>
+  <rect x="26" y="2" width="20" height="20" rx="4" stroke="#FFD500" fill="none" stroke-width="3"/>
+  <line x1="22" y1="12" x2="26" y2="12" stroke="#FFD500" stroke-width="3"/>
+  <text x="0" y="36" font-family="'Segoe UI', Tahoma, sans-serif" font-size="14" fill="#FFD500">ProjectFlow</text>
+</svg>

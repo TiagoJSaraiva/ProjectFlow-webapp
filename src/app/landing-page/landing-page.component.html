@@ -1,0 +1,53 @@
+<main class="landing">
+	<section class="hero">
+		<div class="hero-content">
+			<p class="eyebrow">Fluxos organizados em segundos</p>
+			<h1>Crie novos projetos</h1>
+			<p class="hero-text">
+				Mapeie processos, acompanhe tarefas e mantenha seu time alinhado em um único lugar.
+			</p>
+			<button type="button" class="cta" (click)="createProject()" [disabled]="isCreating">
+				{{ isCreating ? 'Criando...' : 'Novo projeto +' }}
+			</button>
+		</div>
+	</section>
+
+	<section class="projects-shell">
+		<div class="projects-panel">
+			<ng-container *ngIf="!isLoading; else loading">
+				<div *ngIf="projects.length; else emptyState" class="projects-grid">
+					<button
+						type="button"
+						class="project-card create-card"
+						(click)="createProject()"
+						[disabled]="isCreating"
+					>
+						<span>+</span>
+						<p>Novo projeto</p>
+					</button>
+
+					<article class="project-card" *ngFor="let project of projects; trackBy: trackByProject">
+						<h3>{{ project.nome }}</h3>
+						<p class="meta">Criado em: {{ formatDate(project.dataCriado) }}</p>
+						<p class="meta">Último acesso: {{ formatDate(project.ultimaAlteracao) }}</p>
+						<p class="meta">Total de tarefas: {{ project.totalTarefas || 0 }}</p>
+					</article>
+				</div>
+			</ng-container>
+			<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+		</div>
+	</section>
+</main>
+
+<ng-template #loading>
+	<div class="loading-state">Carregando projetos...</div>
+</ng-template>
+
+<ng-template #emptyState>
+	<div class="empty-state">
+		<p>Nenhum projeto ainda.</p>
+		<button type="button" (click)="createProject()" [disabled]="isCreating">
+			{{ isCreating ? 'Criando...' : 'Novo projeto +' }}
+		</button>
+	</div>
+</ng-template>
