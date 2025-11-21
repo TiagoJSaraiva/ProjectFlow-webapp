@@ -24,6 +24,25 @@ interface AuthResponse {
   email: string;
 }
 
+export interface RegisterPayload {
+  nome: string;
+  email: string;
+  senha: string;
+}
+
+export interface UserProfile {
+  id: string;
+  nome: string;
+  email: string;
+  dataCriado: string;
+  emailVerificado: boolean;
+  dataVerificado: string | null;
+}
+
+export interface PasswordRecoveryPayload {
+  email: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly storageKey = 'projectflow_auth_session';
@@ -46,6 +65,23 @@ export class AuthService {
     );
   }
 
+  register(payload: RegisterPayload): Observable<UserProfile> {
+    return this.http.post<UserProfile>(`${this.apiUrl}/register`, payload);
+  }
+
+  requestPasswordRecovery(email: string): Observable<void> {
+    const payload: PasswordRecoveryPayload = { email };
+    return this.http.post<void>(`${this.apiUrl}/recover`, payload);
+  }
+
+  verifyEmail(token: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/verify-email`, { token });
+  }
+
+  resendVerification(email: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/resend-verification`, { email });
+  }
+
   logout(): void {
     this.session.set(null);
     if (this.isBrowser()) {
@@ -63,6 +99,29 @@ export class AuthService {
 
   get token(): string | null {
     return this.session()?.token ?? null;
+  }
+
+  getErrorMessage(error: unknown, fallback: string): string {
+    if (typeof error === 'object' && error !== null) {
+      const responseError = (error as { error?: unknown }).error;
+
+      if (typeof responseError === 'string' && responseError.trim()) {
+        return responseError;
+      }
+
+      if (responseError && typeof responseError === 'object') {
+        const message = (responseError as { message?: string }).message;
+        if (message) {
+          return message;
+        }
+      }
+    }
+
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return fallback;
   }
 
   private persistSession(session: AuthSession): void {

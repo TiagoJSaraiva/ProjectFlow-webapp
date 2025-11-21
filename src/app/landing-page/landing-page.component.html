@@ -26,12 +26,17 @@
 						<p>Novo projeto</p>
 					</button>
 
-					<article class="project-card" *ngFor="let project of projects; trackBy: trackByProject">
+					<button
+						type="button"
+						class="project-card project-button"
+						*ngFor="let project of projects; trackBy: trackByProject"
+						(click)="openProject(project)"
+					>
 						<h3>{{ project.nome }}</h3>
 						<p class="meta">Criado em: {{ formatDate(project.dataCriado) }}</p>
 						<p class="meta">Último acesso: {{ formatDate(project.ultimaAlteracao) }}</p>
 						<p class="meta">Total de tarefas: {{ project.totalTarefas || 0 }}</p>
-					</article>
+					</button>
 				</div>
 			</ng-container>
 			<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>

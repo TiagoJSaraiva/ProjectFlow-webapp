@@ -1,0 +1,45 @@
+<div class="verify-wrapper">
+  <div class="verify-card">
+    <h1>Confirme seu email</h1>
+    <p class="subtitle">
+      {{ infoEmail ? ('Enviamos um link para ' + infoEmail + '.') : 'Enviamos um link para o email informado no cadastro.' }}
+      Abra sua caixa de entrada e clique em "Confirmar email".
+    </p>
+
+    <div class="status verifying" *ngIf="verifying">
+      Validando token de confirmação...
+    </div>
+    <div class="status success" *ngIf="verificationStatus === 'success'">
+      {{ verificationMessage }}
+    </div>
+    <div class="status error" *ngIf="verificationStatus === 'error'">
+      {{ verificationMessage }}
+    </div>
+
+    <section class="resend-section">
+      <h2>Não recebeu o email?</h2>
+      <p>Confirme se o endereço está correto e solicite um novo envio.</p>
+
+      <form [formGroup]="form" (ngSubmit)="resend()" novalidate>
+        <label>
+          Email
+          <input type="email" formControlName="email" placeholder="voce@email.com" />
+        </label>
+        <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
+          Informe um email válido.
+        </div>
+
+        <button type="submit" [disabled]="isResending">
+          {{ isResending ? 'Enviando...' : 'Reenviar email de confirmação' }}
+        </button>
+      </form>
+
+      <p class="status success" *ngIf="resendStatus === 'success'">{{ resendMessage }}</p>
+      <p class="status error" *ngIf="resendStatus === 'error'">{{ resendMessage }}</p>
+    </section>
+
+    <button type="button" class="secondary" (click)="goToLogin()">
+      Voltar para o login
+    </button>
+  </div>
+</div>

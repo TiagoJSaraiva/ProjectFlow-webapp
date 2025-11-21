@@ -1,4 +1,4 @@
-.login-wrapper {
+.recover-wrapper {
   min-height: calc(100vh - 160px);
   background: linear-gradient(180deg, #111 0%, #191919 100%);
   display: flex;
@@ -7,7 +7,7 @@
   padding: 40px 16px;
 }
 
-.login-card {
+.recover-card {
   width: 100%;
   max-width: 420px;
   background-color: #0f0f0f;
@@ -18,7 +18,7 @@
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.55);
 }
 
-.login-card h1 {
+.recover-card h1 {
   margin: 0 0 8px;
   font-size: 1.8rem;
   color: #ffd500;
@@ -50,7 +50,7 @@ input {
   color: #fff;
 }
 
-.login-card button {
+.recover-card button {
   margin-top: 8px;
   padding: 12px;
   background-color: #ffd500;
@@ -62,23 +62,14 @@ input {
   color: #111;
 }
 
-.login-card button[disabled] {
+.recover-card button[disabled] {
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.login-card button.secondary {
+.recover-card button.link-button {
   width: 100%;
   margin-top: 18px;
-  background: transparent;
-  border: 1px solid rgba(255, 213, 0, 0.4);
-  color: #ffd500;
-  font-weight: 600;
-}
-
-.login-card button.text-link {
-  width: 100%;
-  margin-top: 12px;
   background: transparent;
   border: none;
   color: #ffd500;
@@ -92,45 +83,8 @@ input {
   font-size: 0.9rem;
 }
 
-.verify-hint {
-  margin-top: 16px;
-  padding: 16px;
-  border: 1px dashed rgba(255, 213, 0, 0.5);
-  border-radius: 12px;
-  background: rgba(255, 213, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.verify-hint .pill {
-  width: 100%;
-  border-radius: 30px;
-  padding: 10px 14px;
-  border: none;
-  background: #ffd500;
-  color: #111;
-  font-weight: 600;
-}
-
-.verify-hint .pill.ghost {
-  background: transparent;
-  border: 1px solid rgba(255, 213, 0, 0.6);
-  color: #ffd500;
-}
-
-.verify-hint .status {
-  font-size: 0.9rem;
-  border-radius: 8px;
-  padding: 0.6rem;
-}
-
-.verify-hint .status.success {
-  background: rgba(0, 200, 83, 0.12);
-  color: #7df8a7;
-}
-
-.verify-hint .status.error {
-  background: rgba(255, 82, 82, 0.12);
-  color: #ff8a80;
+.success-message {
+  color: #8be78b;
+  font-size: 0.95rem;
+  margin-top: 12px;
 }

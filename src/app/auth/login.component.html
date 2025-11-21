@@ -25,6 +25,28 @@
       </button>
 
       <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+      <div class="verify-hint" *ngIf="unverifiedEmail">
+        <p>
+          Reenviamos instruções para <strong>{{ unverifiedEmail }}</strong>? Caso não tenha encontrado o email,
+          solicite um novo envio ou abra a página de confirmação.
+        </p>
+        <button type="button" class="pill" (click)="resendVerification()" [disabled]="isResending">
+          {{ isResending ? 'Reenviando...' : 'Reenviar email de confirmação' }}
+        </button>
+        <button type="button" class="pill ghost" (click)="goToVerify()">
+          Ver instruções de confirmação
+        </button>
+        <p class="status success" *ngIf="resendStatus === 'success'">{{ resendMessage }}</p>
+        <p class="status error" *ngIf="resendStatus === 'error'">{{ resendMessage }}</p>
+      </div>
     </form>
+
+    <button type="button" class="text-link" (click)="goToRecover()">
+      Esqueci minha senha
+    </button>
+
+    <button type="button" class="secondary" (click)="goToRegister()">
+      Criar conta
+    </button>
   </div>
 </div>

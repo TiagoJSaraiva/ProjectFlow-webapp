@@ -1,0 +1,48 @@
+<div class="register-wrapper">
+  <div class="register-card">
+    <h1>Crie sua conta</h1>
+    <p class="subtitle">Preencha os dados abaixo para começar a organizar seus projetos.</p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label>
+        Nome completo
+        <input type="text" formControlName="nome" placeholder="Maria Silva" />
+      </label>
+      <div class="field-error" *ngIf="form.controls.nome.touched && form.controls.nome.invalid">
+        Informe um nome entre 2 e 100 caracteres.
+      </div>
+
+      <label>
+        Email
+        <input type="email" formControlName="email" placeholder="voce@email.com" />
+      </label>
+      <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
+        Informe um email válido.
+      </div>
+
+      <label>
+        Senha
+        <input type="password" formControlName="senha" placeholder="Mínimo 6 caracteres" />
+      </label>
+      <div class="field-error" *ngIf="form.controls.senha.touched && form.controls.senha.invalid">
+        A senha deve ter pelo menos 6 caracteres.
+      </div>
+
+      <label>
+        Confirmar senha
+        <input type="password" formControlName="confirmacao" placeholder="Repita a senha" />
+      </label>
+
+      <button type="submit" [disabled]="isSubmitting">
+        {{ isSubmitting ? 'Criando...' : 'Criar conta' }}
+      </button>
+
+      <p class="field-error" *ngIf="errorMessage">{{ errorMessage }}</p>
+      <p class="success" *ngIf="successMessage">{{ successMessage }}</p>
+    </form>
+
+    <button type="button" class="secondary" (click)="voltarParaLogin()">
+      Já tenho conta
+    </button>
+  </div>
+</div>
