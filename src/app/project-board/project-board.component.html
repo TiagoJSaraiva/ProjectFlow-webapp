@@ -1,0 +1,125 @@
+<div class="board-shell" [class.loading]="state().isLoading">
+	<header class="board-header">
+		<div class="header-left">
+			<button class="ghost" type="button" (click)="goBack()">Voltar</button>
+			<div class="project-meta">
+				<input
+					type="text"
+					maxlength="100"
+					[ngModel]="state().projectName"
+					(ngModelChange)="onProjectNameChange($event)"
+					placeholder="Nome do projeto"
+				/>
+				<textarea
+					rows="1"
+					maxlength="10000"
+					[ngModel]="state().projectDescription"
+					(ngModelChange)="onProjectDescriptionChange($event)"
+					placeholder="Descrição"
+				></textarea>
+			</div>
+		</div>
+		<div class="header-right">
+			<span class="status" [class.dirty]="state().isDirty" [class.error]="isErrorStatus()">
+				{{ state().statusMessage ? state().statusMessage : state().isDirty ? 'Alterações não salvas' : 'Tudo sincronizado' }}
+			</span>
+			<button type="button" class="primary" (click)="onSave()" [disabled]="!state().isDirty || state().isSaving">
+				{{ state().isSaving ? 'Salvando...' : 'Salvar manualmente' }}
+			</button>
+		</div>
+	</header>
+
+	<div class="board-body">
+		<aside class="board-sidebar" [class.closed]="!state().sidebarOpen">
+			<div class="sidebar-header">
+				<div class="tabs" *ngIf="!state().selectedNodeId">
+					<button type="button" [class.active]="effectiveSidebarMode() === 'catalog'" (click)="setSidebarMode('catalog')">Catálogo</button>
+					<button type="button" [class.active]="effectiveSidebarMode() === 'project'" (click)="setSidebarMode('project')">Projeto</button>
+				</div>
+				<button class="ghost" type="button" (click)="toggleSidebar()">{{ state().sidebarOpen ? 'Ocultar' : 'Mostrar' }}</button>
+			</div>
+
+			<section *ngIf="effectiveSidebarMode() === 'catalog'" class="sidebar-section">
+				<h3>Elementos</h3>
+				<p>Arraste para o canvas para adicionar um elemento. Tudo começa com <em>Sample text</em>.</p>
+				<div class="palette">
+					<button
+						type="button"
+						draggable="true"
+						(dragstart)="onPaletteDragStart($event, 'RECTANGLE')"
+						class="palette-item rectangle"
+					>
+						<span>Bloco retangular</span>
+					</button>
+					<button
+						type="button"
+						draggable="true"
+						(dragstart)="onPaletteDragStart($event, 'CIRCLE')"
+						class="palette-item circle"
+					>
+						<span>Marco circular</span>
+					</button>
+				</div>
+				<div class="hint">
+					<strong>Dica:</strong> use o botão "Criar conexão" nas propriedades do elemento para ligar blocos.
+				</div>
+			</section>
+
+			<section *ngIf="effectiveSidebarMode() === 'project'" class="sidebar-section">
+				<h3>Sobre o projeto</h3>
+				<label>
+					<span>Nome</span>
+					<input type="text" maxlength="100" [ngModel]="state().projectName" (ngModelChange)="onProjectNameChange($event)" />
+				</label>
+				<label>
+					<span>Descrição</span>
+					<textarea rows="5" maxlength="10000" [ngModel]="state().projectDescription" (ngModelChange)="onProjectDescriptionChange($event)"></textarea>
+				</label>
+			</section>
+
+			<section *ngIf="effectiveSidebarMode() === 'node' && selectedNode() as node" class="sidebar-section">
+				<h3>Elemento selecionado</h3>
+				<p class="text-muted">{{ node.type === 'RECTANGLE' ? 'Bloco' : 'Marco' }} — {{ node.id }}</p>
+				<label>
+					<span>Título</span>
+					<input type="text" maxlength="100" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" />
+				</label>
+				<label>
+					<span>Descrição</span>
+					<textarea rows="4" maxlength="500" [ngModel]="node.description" (ngModelChange)="updateNodeField('description', $event)"></textarea>
+				</label>
+				<div class="actions">
+					<button type="button" class="secondary" (click)="startLinkWorkflow(node.id)">Criar conexão</button>
+					<button type="button" class="ghost" (click)="deleteNode(node.id)">Remover</button>
+				</div>
+				<div class="connections" *ngIf="selectedConnections().length > 0">
+					<h4>Conexões</h4>
+					<ul>
+						<li *ngFor="let connection of selectedConnections(); trackBy: trackByConnection">
+							<span>{{ resolveNodeLabel(connection.fromNodeId) }} → {{ resolveNodeLabel(connection.toNodeId) }}</span>
+							<button type="button" class="ghost" (click)="deleteConnection(connection.id)">Excluir</button>
+						</li>
+					</ul>
+				</div>
+				<button type="button" class="ghost" (click)="clearSelection()">Voltar ao catálogo</button>
+			</section>
+		</aside>
+
+		<div class="board-canvas">
+			<div class="canvas-toolbar">
+				<p>Zoom com a roda do mouse. Arraste o fundo para movimentar o diagrama.</p>
+				<button type="button" class="ghost" (click)="toggleSidebar()">{{ state().sidebarOpen ? 'Esconder painel' : 'Mostrar painel' }}</button>
+			</div>
+			<div class="link-indicator" *ngIf="linkModeActive()">
+				<span>Escolha outro elemento para concluir a conexão.</span>
+				<button type="button" (click)="cancelLinkWorkflow()">Cancelar</button>
+			</div>
+			<div #stageContainer class="stage-container"></div>
+		</div>
+	</div>
+
+	<div class="loading-overlay" *ngIf="state().isLoading">
+		<div class="spinner"></div>
+		<span>Carregando diagrama...</span>
+	</div>
+</div>

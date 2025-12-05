@@ -31,6 +31,12 @@ export const routes: Routes = [
 	{
 		path: '',
 		component: LandingPageComponent,
+		canActivate: [authGuard],
+		pathMatch: 'full'
+	},
+	{
+		path: 'projects/:id/board',
+		loadComponent: () => import('./project-board/project-board.component').then((m) => m.ProjectBoardComponent),
 		canActivate: [authGuard]
 	},
 	{

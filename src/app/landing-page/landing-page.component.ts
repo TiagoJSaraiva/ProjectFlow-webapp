@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { Project } from '../projects/project.model';
 import { ProjectService } from '../projects/project.service';
 
@@ -31,7 +32,7 @@ export class LandingPageComponent implements OnInit {
   errorMessage = '';
   private projectCounter = 1;
 
-  constructor(private readonly projectService: ProjectService) {}
+  constructor(private readonly projectService: ProjectService, private readonly router: Router) {}
 
   ngOnInit(): void {
     this.loadProjects();
@@ -89,7 +90,7 @@ export class LandingPageComponent implements OnInit {
   }
 
   openProject(project: Project): void {
-    console.log('Botão clicado', project);
+    this.router.navigate(['/projects', project.id, 'board']);
   }
 
   formatDate(date?: DateInput): string {
