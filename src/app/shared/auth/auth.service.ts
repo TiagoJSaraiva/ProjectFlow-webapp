@@ -43,6 +43,11 @@ export interface PasswordRecoveryPayload {
   email: string;
 }
 
+export interface PasswordResetPayload {
+  token: string;
+  novaSenha: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly storageKey = 'projectflow_auth_session';
@@ -72,6 +77,10 @@ export class AuthService {
   requestPasswordRecovery(email: string): Observable<void> {
     const payload: PasswordRecoveryPayload = { email };
     return this.http.post<void>(`${this.apiUrl}/recover`, payload);
+  }
+
+  resetPassword(payload: PasswordResetPayload): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/reset-password`, payload);
   }
 
   verifyEmail(token: string): Observable<void> {

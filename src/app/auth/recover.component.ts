@@ -45,7 +45,7 @@ export class RecoverComponent {
     this.authService.requestPasswordRecovery(email).subscribe({
       next: () => {
         this.isSubmitting = false;
-        this.successMessage = 'Se o email estiver cadastrado, enviaremos instruções em instantes.';
+        this.successMessage = 'Se o email estiver cadastrado, você receberá um código e um link para definir uma nova senha.';
       },
       error: (err) => {
         this.isSubmitting = false;
@@ -59,6 +59,10 @@ export class RecoverComponent {
 
   voltarParaLogin(): void {
     this.router.navigate(['/login']);
+  }
+
+  tenhoCodigo(): void {
+    this.router.navigate(['/reset']);
   }
 
 }
