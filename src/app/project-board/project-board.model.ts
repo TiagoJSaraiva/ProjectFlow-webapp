@@ -63,11 +63,11 @@ export interface ProjectBoardState {
 	nodes: DiagramNode[];
 	connections: DiagramConnection[];
 	selectedNodeId: string | null;
-	sidebarOpen: boolean;
 	sidebarMode: 'catalog' | 'project' | 'node';
 	linkSourceId: string | null;
 	isDirty: boolean;
 	isSaving: boolean;
+	isDeleting: boolean;
 	isLoading: boolean;
 	statusMessage: string | null;
 }

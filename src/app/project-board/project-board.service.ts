@@ -16,4 +16,8 @@ export class ProjectBoardService {
 	saveDiagram(projectId: string, payload: SaveProjectDiagramPayload): Observable<ProjectDiagramResponse> {
 		return this.http.put<ProjectDiagramResponse>(`${this.baseUrl}/${projectId}/diagram`, payload);
 	}
+
+	deleteProject(projectId: string): Observable<void> {
+		return this.http.delete<void>(`${this.baseUrl}/${projectId}`);
+	}
 }

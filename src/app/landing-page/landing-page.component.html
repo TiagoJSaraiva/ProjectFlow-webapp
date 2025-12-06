@@ -34,7 +34,7 @@
 					>
 						<h3>{{ project.nome }}</h3>
 						<p class="meta">Criado em: {{ formatDate(project.dataCriado) }}</p>
-						<p class="meta">Último acesso: {{ formatDate(project.ultimaAlteracao) }}</p>
+						<p class="meta">Último acesso: {{ formatDate(project.ultimoAcesso || project.ultimaAlteracao) }}</p>
 						<p class="meta">Total de tarefas: {{ project.totalTarefas || 0 }}</p>
 					</button>
 				</div>

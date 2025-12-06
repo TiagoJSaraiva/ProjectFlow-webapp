@@ -22,6 +22,7 @@ import { ProjectBoardService } from './project-board.service';
 
 const DEFAULT_RECT = { width: 200, height: 120 };
 const DEFAULT_RADIUS = 64;
+const NODE_NAME_MAX_LENGTH = 35;
 
 @Component({
 	selector: 'app-project-board',
@@ -42,11 +43,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		nodes: [],
 		connections: [],
 		selectedNodeId: null,
-		sidebarOpen: true,
 		sidebarMode: 'catalog',
 		linkSourceId: null,
 		isDirty: false,
 		isSaving: false,
+		isDeleting: false,
 		isLoading: true,
 		statusMessage: null
 	});
@@ -165,16 +166,12 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		return connection.id;
 	}
 
-	toggleSidebar(): void {
-		this.updateState({ sidebarOpen: !this.state().sidebarOpen });
-	}
-
 	setSidebarMode(mode: 'catalog' | 'project'): void {
 		this.updateState({ sidebarMode: mode, selectedNodeId: mode === 'project' ? null : this.state().selectedNodeId });
 	}
 
 	selectNode(nodeId: string): void {
-		this.updateState({ selectedNodeId: nodeId, sidebarOpen: true });
+		this.updateState({ selectedNodeId: nodeId });
 	}
 
 	clearSelection(): void {
@@ -296,16 +293,20 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		if (!selected) {
 			return;
 		}
+		const normalizedValue =
+			typeof value === 'number'
+				? value
+				: field === 'name'
+					? this.truncateNodeName(value)
+					: value;
 		this.state.update((current) => ({
 			...current,
-			nodes: current.nodes.map((node) =>
-				node.id === selected
-					? {
-						...node,
-						[field]: typeof value === 'number' ? value : value
-					}
-					: node
-			),
+			nodes: current.nodes.map((node) => {
+				if (node.id !== selected) {
+					return node;
+				}
+				return { ...node, [field]: normalizedValue } as DiagramNode;
+			}),
 			isDirty: true
 		}));
 	}
@@ -318,7 +319,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		this.updateState({ projectDescription: value.slice(0, 10000), isDirty: true });
 	}
 
-	onSave(): void {
+	onSave(afterSave?: () => void): void {
 		if (!this.state().projectId || this.state().isSaving) {
 			return;
 		}
@@ -328,13 +329,42 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.saveDiagram(this.state().projectId, payload)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
-				next: (response) => this.hydrateState(response, true, 'Diagrama salvo com sucesso.'),
+				next: (response) => {
+					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
+					afterSave?.();
+				},
 				error: () => this.updateState({ isSaving: false, statusMessage: 'Não foi possível salvar o projeto. Tente novamente.' })
 			});
 	}
 
 	goBack(): void {
-		this.router.navigateByUrl('/');
+		if (!this.state().isDirty) {
+			this.router.navigateByUrl('/');
+			return;
+		}
+		const confirmLeave = window.confirm('Tem certeza que deseja sair sem salvar?');
+		if (confirmLeave) {
+			this.router.navigateByUrl('/');
+		}
+	}
+
+	deleteProject(): void {
+		const projectId = this.state().projectId;
+		if (!projectId || this.state().isDeleting) {
+			return;
+		}
+		const confirmed = window.confirm('Tem certeza que deseja apagar este projeto? Esta ação não pode ser desfeita.');
+		if (!confirmed) {
+			return;
+		}
+		this.updateState({ isDeleting: true, statusMessage: 'Apagando projeto...' });
+		this.boardService
+			.deleteProject(projectId)
+			.pipe(takeUntil(this.destroy$))
+			.subscribe({
+				next: () => this.router.navigateByUrl('/'),
+				error: () => this.updateState({ isDeleting: false, statusMessage: 'Não foi possível apagar o projeto.' })
+			});
 	}
 
 	private loadDiagram(projectId: string): void {
@@ -349,19 +379,23 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	private hydrateState(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
+		const sanitizedNodes = (response.nodes ?? []).map((node) => ({
+			...node,
+			name: this.truncateNodeName(node.name ?? 'Sample text')
+		}));
 		this.state.set({
 			projectId: response.projectId,
 			projectName: response.projectName ?? 'Projeto sem nome',
 			projectDescription: response.projectDescription ?? '',
 			viewport: response.viewport ?? { zoom: 1, offsetX: 0, offsetY: 0, gridSize: 64 },
-			nodes: response.nodes ?? [],
+			nodes: sanitizedNodes,
 			connections: response.connections ?? [],
 			selectedNodeId: null,
-			sidebarOpen: true,
 			sidebarMode: 'catalog',
 			linkSourceId: null,
 			isDirty: markClean ? false : this.state().isDirty,
 			isSaving: false,
+			isDeleting: false,
 			isLoading: false,
 			statusMessage
 		});
@@ -556,7 +590,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			});
 
 			group.on('dragend', () => this.persistNodePosition(node.id, group));
-			group.on('mousedown tap', (evt) => {
+			group.on('click tap', (evt) => {
 				evt.cancelBubble = true;
 				if (linkSourceId && linkSourceId !== node.id) {
 					this.completeConnection(node.id);
@@ -592,6 +626,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			}
 
 			const textWidth = node.type === 'RECTANGLE' ? node.width ?? DEFAULT_RECT.width : (node.radius ?? DEFAULT_RADIUS) * 2;
+			const textHeight = node.type === 'RECTANGLE' ? node.height ?? DEFAULT_RECT.height : (node.radius ?? DEFAULT_RADIUS) * 2;
 			const label = new Konva.Text({
 				text: node.name || 'Sample text',
 				fontFamily: 'Space Grotesk, Inter, sans-serif',
@@ -599,9 +634,12 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 				fontStyle: '600',
 				fill: palette.text,
 				width: textWidth,
+				height: textHeight,
 				align: 'center',
+				verticalAlign: 'middle',
 				offsetX: textWidth / 2,
-				y: node.type === 'RECTANGLE' ? -(node.height ?? DEFAULT_RECT.height) / 2 - 28 : -(node.radius ?? DEFAULT_RADIUS) - 32
+				offsetY: textHeight / 2,
+				listening: false
 			});
 			group.add(label);
 
@@ -682,7 +720,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		const newNode: DiagramNode = {
 			id: this.generateId(),
 			type,
-			name: 'Sample text',
+			name: this.truncateNodeName('Sample text'),
 			description: '',
 			x: position.x,
 			y: position.y,
@@ -698,7 +736,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			nodes: [...current.nodes, newNode],
 			selectedNodeId: newNode.id,
 			sidebarMode: 'node',
-			sidebarOpen: true,
 			isDirty: true
 		}));
 	}
@@ -756,6 +793,10 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			nodes: this.state().nodes,
 			connections: this.state().connections
 		};
+	}
+
+	private truncateNodeName(value: string): string {
+		return (value ?? '').slice(0, NODE_NAME_MAX_LENGTH);
 	}
 
 	private resolvePalette(node: DiagramNode): { fill: string; stroke: string; activeStroke: string; text: string } {

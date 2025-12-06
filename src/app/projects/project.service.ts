@@ -19,9 +19,10 @@ interface LocalDateTimeLike {
   nano?: number;
 }
 
-type ProjectApiResponse = Omit<Project, 'dataCriado' | 'ultimaAlteracao'> & {
+type ProjectApiResponse = Omit<Project, 'dataCriado' | 'ultimaAlteracao' | 'ultimoAcesso'> & {
   dataCriado?: DateValue;
   ultimaAlteracao?: DateValue;
+  ultimoAcesso?: DateValue;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -65,6 +66,7 @@ export class ProjectService {
       ...project,
       dataCriado: this.resolveDateString(project.dataCriado),
       ultimaAlteracao: this.resolveDateString(project.ultimaAlteracao),
+      ultimoAcesso: this.resolveDateString(project.ultimoAcesso),
       totalTarefas: project.totalTarefas ?? 0
     };
   }

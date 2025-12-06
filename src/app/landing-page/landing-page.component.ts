@@ -123,6 +123,7 @@ export class LandingPageComponent implements OnInit {
 
     const resolvedCreated = this.parseDateInput(project?.dataCriado) ?? new Date(nowIso);
     const resolvedUpdated = this.parseDateInput(project?.ultimaAlteracao) ?? new Date(nowIso);
+    const resolvedLastAccess = this.parseDateInput(project?.ultimoAcesso) ?? resolvedUpdated;
 
     return {
       id: project?.id ?? this.generateTempId(),
@@ -130,6 +131,7 @@ export class LandingPageComponent implements OnInit {
       descricao: project?.descricao ?? '',
       dataCriado: resolvedCreated.toISOString(),
       ultimaAlteracao: resolvedUpdated.toISOString(),
+      ultimoAcesso: resolvedLastAccess.toISOString(),
       usuarioId: project?.usuarioId ?? '',
       usuarioNome: project?.usuarioNome ?? '',
       totalTarefas: project?.totalTarefas ?? 0

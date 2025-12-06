@@ -4,6 +4,7 @@ export interface Project {
   descricao: string | null;
   dataCriado: string;
   ultimaAlteracao: string;
+  ultimoAcesso: string;
   usuarioId: string;
   usuarioNome: string;
   totalTarefas: number;
