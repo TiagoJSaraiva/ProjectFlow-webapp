@@ -107,6 +107,53 @@
 		</div>
 	</div>
 
+	<div class="modal-overlay" *ngIf="deleteDialogOpen()">
+		<div class="modal-card">
+			<h3>Deseja apagar este projeto?</h3>
+			<p>Esta ação não pode ser desfeita.</p>
+			<div class="modal-actions equal-width">
+				<button type="button" class="ghost danger" (click)="confirmDeleteProject()" [disabled]="state().isDeleting">
+					{{ state().isDeleting ? 'Apagando...' : 'Sim' }}
+				</button>
+				<button type="button" class="secondary" (click)="cancelDeleteProject()">Não</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal-overlay" *ngIf="reloadDialogOpen()">
+		<div class="modal-card">
+			<h3>Deseja recarregar a página?</h3>
+			<p>É possível que alterações feitas não sejam salvas.</p>
+			<div class="modal-actions equal-width">
+				<button type="button" class="primary" (click)="confirmReload()">Recarregar</button>
+				<button type="button" class="secondary" (click)="cancelReloadDialog()">Cancelar</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal-overlay" *ngIf="unsavedDialogOpen()">
+		<div class="modal-card">
+			<h3>O Projeto possui alterações não salvas</h3>
+			<p>Escolha como deseja continuar antes de sair.</p>
+			<div class="modal-actions stacked">
+				<button
+					type="button"
+					class="primary"
+					(click)="onUnsavedDialogAction('save')"
+					[disabled]="state().isSaving"
+				>
+					{{ state().isSaving ? 'Salvando...' : 'Salvar e sair' }}
+				</button>
+				<button type="button" class="ghost danger" (click)="onUnsavedDialogAction('discard')" [disabled]="state().isSaving">
+					Sair sem salvar
+				</button>
+				<button type="button" class="secondary" (click)="onUnsavedDialogAction('cancel')" [disabled]="state().isSaving">
+					Cancelar
+				</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="loading-overlay" *ngIf="state().isLoading">
 		<div class="spinner"></div>
 		<span>Carregando diagrama...</span>

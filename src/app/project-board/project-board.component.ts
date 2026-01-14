@@ -23,6 +23,7 @@ import { ProjectBoardService } from './project-board.service';
 const DEFAULT_RECT = { width: 200, height: 120 };
 const DEFAULT_RADIUS = 64;
 const NODE_NAME_MAX_LENGTH = 35;
+type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
 
 @Component({
 	selector: 'app-project-board',
@@ -65,6 +66,9 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		return this.state().connections.filter((conn) => conn.fromNodeId === selected || conn.toNodeId === selected);
 	});
 	readonly linkModeActive = computed(() => Boolean(this.state().linkSourceId));
+	readonly deleteDialogOpen = signal(false);
+	readonly unsavedDialogOpen = signal(false);
+	readonly reloadDialogOpen = signal(false);
 	private readonly injector = inject(Injector);
 	private readonly viewportEffect = effect(
 		() => {
@@ -84,10 +88,9 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	private readonly diagramEffect = effect(
 		() => {
 			const state = this.state();
-			console.debug('[ProjectBoard] diagram effect tick', {
-				stageReady: Boolean(this.stage),
-				nodeCount: state.nodes.length
-			});
+			if (!this.stage) {
+				return;
+			}
 			if (!this.stage) {
 				return;
 			}
@@ -124,6 +127,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	private paletteDragType: DiagramNodeType | null = null;
 	private resizeObserver?: ResizeObserver;
 	private currentGridSize: number | null = null;
+	private unsavedDialogResolver: ((choice: UnsavedDialogChoice) => void) | null = null;
+	private readonly supportsNativeBeforeUnload = typeof window !== 'undefined' && 'onbeforeunload' in window;
+	private unloadIntent: 'reload' | 'close' | null = null;
+	private fallbackAction: 'reload' | 'close' | null = null;
+	private allowExternalUnload = false;
 
 	constructor(
 		private readonly route: ActivatedRoute,
@@ -144,10 +152,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 	ngAfterViewInit(): void {
 		this.initStage();
-		console.debug('[ProjectBoard] Stage initialized', {
-			container: this.stageContainer?.nativeElement,
-			stageSize: { width: this.stage?.width(), height: this.stage?.height() }
-		});
 		this.safeRenderAll();
 	}
 
@@ -219,6 +223,42 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			return;
 		}
 		this.onCanvasDrop(event);
+	}
+
+	@HostListener('window:keydown', ['$event'])
+	handleWindowKeydown(event: KeyboardEvent): void {
+		if (!this.state().isDirty) {
+			return;
+		}
+		const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
+		if (!isReloadShortcut) {
+			return;
+		}
+		this.unloadIntent = 'reload';
+	}
+
+	@HostListener('window:beforeunload', ['$event'])
+	handleBeforeUnload(event: BeforeUnloadEvent): void {
+		if (!this.state().isDirty || this.allowExternalUnload) {
+			this.unloadIntent = null;
+			return;
+		}
+		const intent = this.unloadIntent ?? 'close';
+		if (this.supportsNativeBeforeUnload) {
+			event.preventDefault();
+			event.returnValue = '';
+			this.unloadIntent = null;
+			this.fallbackAction = null;
+			return;
+		}
+		event.preventDefault();
+		this.fallbackAction = intent;
+		if (intent === 'reload') {
+			this.reloadDialogOpen.set(true);
+		} else {
+			this.showFallbackUnsavedExitDialog();
+		}
+		this.unloadIntent = null;
 	}
 
 	private isPointerInsideStage(clientX: number, clientY: number): boolean {
@@ -319,7 +359,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		this.updateState({ projectDescription: value.slice(0, 10000), isDirty: true });
 	}
 
-	onSave(afterSave?: () => void): void {
+	onSave(afterSave?: () => void, onError?: () => void): void {
 		if (!this.state().projectId || this.state().isSaving) {
 			return;
 		}
@@ -333,7 +373,10 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
 					afterSave?.();
 				},
-				error: () => this.updateState({ isSaving: false, statusMessage: 'Não foi possível salvar o projeto. Tente novamente.' })
+				error: () => {
+					this.updateState({ isSaving: false, statusMessage: 'Não foi possível salvar o projeto. Tente novamente.' });
+					onError?.();
+				}
 			});
 	}
 
@@ -342,10 +385,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			this.router.navigateByUrl('/');
 			return;
 		}
-		const confirmLeave = window.confirm('Tem certeza que deseja sair sem salvar?');
-		if (confirmLeave) {
-			this.router.navigateByUrl('/');
-		}
+		this.promptUnsavedDialog().then((choice) => this.handleUnsavedChoice(choice, () => this.router.navigateByUrl('/')));
 	}
 
 	deleteProject(): void {
@@ -353,10 +393,15 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		if (!projectId || this.state().isDeleting) {
 			return;
 		}
-		const confirmed = window.confirm('Tem certeza que deseja apagar este projeto? Esta ação não pode ser desfeita.');
-		if (!confirmed) {
+		this.deleteDialogOpen.set(true);
+	}
+
+	confirmDeleteProject(): void {
+		const projectId = this.state().projectId;
+		if (!projectId || this.state().isDeleting) {
 			return;
 		}
+		this.deleteDialogOpen.set(false);
 		this.updateState({ isDeleting: true, statusMessage: 'Apagando projeto...' });
 		this.boardService
 			.deleteProject(projectId)
@@ -365,6 +410,106 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 				next: () => this.router.navigateByUrl('/'),
 				error: () => this.updateState({ isDeleting: false, statusMessage: 'Não foi possível apagar o projeto.' })
 			});
+	}
+
+	cancelDeleteProject(): void {
+		this.deleteDialogOpen.set(false);
+	}
+
+	requestUnsavedExitPermission(): Promise<boolean> {
+		if (!this.state().isDirty) {
+			return Promise.resolve(true);
+		}
+		return new Promise<boolean>((resolve) => {
+			this.promptUnsavedDialog().then((choice) => {
+				if (choice === 'cancel') {
+					resolve(false);
+					return;
+				}
+				if (choice === 'save') {
+					this.onSave(
+						() => resolve(true),
+						() => resolve(false)
+					);
+					return;
+				}
+				resolve(true);
+			});
+		});
+	}
+
+	onUnsavedDialogAction(choice: UnsavedDialogChoice): void {
+		this.unsavedDialogResolver?.(choice);
+	}
+
+	confirmReload(): void {
+		this.reloadDialogOpen.set(false);
+		if (!this.state().isDirty) {
+			window.location.reload();
+			return;
+		}
+		if (this.fallbackAction === 'reload') {
+			this.executeFallbackAction('reload');
+		}
+		this.fallbackAction = null;
+	}
+
+	cancelReloadDialog(): void {
+		this.reloadDialogOpen.set(false);
+		if (this.fallbackAction === 'reload') {
+			this.fallbackAction = null;
+		}
+		this.unloadIntent = null;
+	}
+
+	private handleUnsavedChoice(choice: UnsavedDialogChoice, continueCallback: () => void): void {
+		if (choice === 'cancel') {
+			return;
+		}
+		if (choice === 'save') {
+			this.onSave(continueCallback);
+			return;
+		}
+		continueCallback();
+	}
+
+	private promptUnsavedDialog(): Promise<UnsavedDialogChoice> {
+		if (this.unsavedDialogResolver) {
+			this.unsavedDialogResolver('cancel');
+		}
+		this.unsavedDialogOpen.set(true);
+		return new Promise((resolve) => {
+			this.unsavedDialogResolver = (choice) => {
+				this.unsavedDialogOpen.set(false);
+				this.unsavedDialogResolver = null;
+				resolve(choice);
+			};
+		});
+	}
+
+	private showFallbackUnsavedExitDialog(): void {
+		this.promptUnsavedDialog().then((choice) => {
+			if (choice === 'cancel') {
+				this.fallbackAction = null;
+				this.unloadIntent = null;
+				return;
+			}
+			this.handleUnsavedChoice(choice, () => this.executeFallbackAction('close'));
+		});
+	}
+
+	private executeFallbackAction(action: 'reload' | 'close'): void {
+		this.allowExternalUnload = true;
+		this.fallbackAction = null;
+		this.unloadIntent = null;
+		if (action === 'reload') {
+			window.location.reload();
+			return;
+		}
+		window.close();
+		setTimeout(() => {
+			this.allowExternalUnload = false;
+		}, 0);
 	}
 
 	private loadDiagram(projectId: string): void {
@@ -564,7 +709,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			group.position({ x: viewport.offsetX, y: viewport.offsetY });
 			group.scale({ x: viewport.zoom, y: viewport.zoom });
 		});
-		console.debug('[ProjectBoard] Viewport applied', viewport);
 		this.drawGrid(viewport.gridSize);
 	}
 
@@ -572,15 +716,9 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		if (!this.nodeGroup) {
 			return;
 		}
-		console.debug('[ProjectBoard] Rendering nodes', {
-			count: nodes.length,
-			viewport: this.state().viewport,
-			groupScale: this.nodeGroup.scale(),
-			groupPosition: this.nodeGroup.position()
-		});
 		this.nodeGroup.destroyChildren();
 		for (const node of nodes) {
-			console.debug('[ProjectBoard] Rendering node', node);
+			// Removed debug log to keep console clean
 			const group = new Konva.Group({
 				x: node.x,
 				y: node.y,
@@ -646,7 +784,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			this.nodeGroup.add(group);
 		}
 		this.nodeLayer?.batchDraw();
-		console.debug('[ProjectBoard] node layer children', this.nodeGroup.getChildren().length);
 	}
 
 	private renderConnections(nodes: DiagramNode[], connections: DiagramConnection[]): void {
@@ -716,7 +853,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	private addNode(type: DiagramNodeType, position: DiagramPoint): void {
-		console.debug('[ProjectBoard] Adding node from drag/drop', { type, position });
 		const newNode: DiagramNode = {
 			id: this.generateId(),
 			type,

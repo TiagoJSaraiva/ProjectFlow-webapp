@@ -6,6 +6,7 @@ import { ResetPasswordComponent } from './auth/reset-password.component';
 import { VerifyEmailComponent } from './auth/verify-email.component';
 import { LandingPageComponent } from './landing-page/landing-page.component';
 import { authGuard } from './shared/auth/auth.guard';
+import { projectBoardPendingChangesGuard } from './project-board/project-board-pending-changes.guard';
 
 export const routes: Routes = [
 	{
@@ -37,7 +38,8 @@ export const routes: Routes = [
 	{
 		path: 'projects/:id/board',
 		loadComponent: () => import('./project-board/project-board.component').then((m) => m.ProjectBoardComponent),
-		canActivate: [authGuard]
+		canActivate: [authGuard],
+		canDeactivate: [projectBoardPendingChangesGuard]
 	},
 	{
 		path: '**',
