@@ -10,6 +10,10 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  router.navigate(['/login']);
-  return false;
+  // Havia sessão salva, mas o token expirou: limpa e avisa na tela de login.
+  if (authService.currentSession()) {
+    authService.expireSession();
+  }
+
+  return router.createUrlTree(['/login']);
 };

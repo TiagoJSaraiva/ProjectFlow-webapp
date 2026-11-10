@@ -13,6 +13,7 @@ import { AuthService } from '../shared/auth/auth.service';
 })
 export class LoginComponent implements OnInit {
   errorMessage = '';
+  sessionNotice = '';
   isSubmitting = false;
   unverifiedEmail = '';
   resendStatus: 'idle' | 'success' | 'error' = 'idle';
@@ -32,6 +33,7 @@ export class LoginComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.sessionNotice = this.authService.consumeSessionNotice();
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/']);
     }

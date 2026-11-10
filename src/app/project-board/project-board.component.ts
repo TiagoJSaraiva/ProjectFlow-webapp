@@ -18,6 +18,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import Konva from 'konva';
 import { Subject, takeUntil } from 'rxjs';
 import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
+import { getApiErrorMessage } from '../shared/api-error';
 import { ProjectSyncService } from '../projects/project-sync.service';
 import { ProjectBoardService } from './project-board.service';
 
@@ -377,8 +378,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 					this.announceProjectSnapshot(response, 'save');
 					afterSave?.();
 				},
-				error: () => {
-					this.updateState({ isSaving: false, statusMessage: 'Não foi possível salvar o projeto. Tente novamente.' });
+				error: (error: unknown) => {
+					this.updateState({
+						isSaving: false,
+						statusMessage: getApiErrorMessage(error, 'Não foi possível salvar o projeto. Tente novamente.')
+					});
 					onError?.();
 				}
 			});
@@ -412,7 +416,8 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: () => this.router.navigateByUrl('/'),
-				error: () => this.updateState({ isDeleting: false, statusMessage: 'Não foi possível apagar o projeto.' })
+				error: (error: unknown) =>
+					this.updateState({ isDeleting: false, statusMessage: getApiErrorMessage(error, 'Não foi possível apagar o projeto.') })
 			});
 	}
 
@@ -526,7 +531,8 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 					this.hydrateState(response, true, null);
 					this.announceProjectSnapshot(response, 'load');
 				},
-				error: () => this.updateState({ isLoading: false, statusMessage: 'Não foi possível carregar o projeto.' })
+				error: (error: unknown) =>
+					this.updateState({ isLoading: false, statusMessage: getApiErrorMessage(error, 'Não foi possível carregar o projeto.') })
 			});
 	}
 

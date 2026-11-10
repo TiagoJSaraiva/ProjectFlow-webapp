@@ -3,6 +3,10 @@
     <h1>Bem-vindo ao ProjectFlow</h1>
     <p class="subtitle">Entre com sua conta para acessar seus projetos.</p>
 
+    @if (sessionNotice) {
+      <p class="session-notice" role="alert">{{ sessionNotice }}</p>
+    }
+
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <label>
         Email

@@ -4,6 +4,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { Project } from '../projects/project.model';
 import { ProjectSyncService, ProjectSyncUpdate } from '../projects/project-sync.service';
 import { ProjectService } from '../projects/project.service';
+import { getApiErrorMessage } from '../shared/api-error';
 
 type DateInput = string | number | number[] | Date | LocalDateTimeLike | null | undefined;
 
@@ -71,8 +72,8 @@ export class LandingPageComponent implements OnInit, OnDestroy {
           this.isLoading = false;
         }
       },
-      error: () => {
-        this.errorMessage = 'Não foi possível carregar os projetos. Tente novamente mais tarde.';
+      error: (error: unknown) => {
+        this.errorMessage = getApiErrorMessage(error, 'Não foi possível carregar os projetos. Tente novamente mais tarde.');
         if (shouldShowSpinner) {
           this.isLoading = false;
         }
@@ -96,8 +97,8 @@ export class LandingPageComponent implements OnInit, OnDestroy {
         this.isCreating = false;
         this.loadProjects({ silent: true });
       },
-      error: () => {
-        this.errorMessage = 'Não foi possível criar o projeto. Tente novamente.';
+      error: (error: unknown) => {
+        this.errorMessage = getApiErrorMessage(error, 'Não foi possível criar o projeto. Tente novamente.');
         this.isCreating = false;
       }
     });

@@ -134,3 +134,12 @@ input {
   background: rgba(255, 82, 82, 0.12);
   color: #ff8a80;
 }
+
+.session-notice {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 213, 0, 0.5);
+  color: #ffd500;
+  font-size: 0.9rem;
+}

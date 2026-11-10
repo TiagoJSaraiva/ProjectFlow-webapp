@@ -53,6 +53,42 @@ describe('AuthService', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
+  describe('expiração de sessão', () => {
+    function fakeJwt(expSeconds: number): string {
+      const encode = (value: object) => btoa(JSON.stringify(value)).replace(/=+$/, '');
+      return `${encode({ alg: 'HS512' })}.${encode({ exp: expSeconds })}.sig`;
+    }
+
+    function storeSession(token: string): void {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ token, tipo: 'Bearer', userId: 'u1', nome: 'Ana', email: 'ana@x.com' })
+      );
+    }
+
+    it('considera não autenticado um token JWT já expirado', () => {
+      storeSession(fakeJwt(Math.floor(Date.now() / 1000) - 60));
+      setup();
+      expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('considera autenticado um token JWT dentro da validade', () => {
+      storeSession(fakeJwt(Math.floor(Date.now() / 1000) + 3600));
+      setup();
+      expect(service.isAuthenticated()).toBeTrue();
+    });
+
+    it('expireSession limpa a sessão e deixa um aviso consumível uma única vez', () => {
+      storeSession(fakeJwt(Math.floor(Date.now() / 1000) + 3600));
+      setup();
+      service.expireSession();
+      expect(service.isAuthenticated()).toBeFalse();
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(service.consumeSessionNotice()).toContain('sessão expirou');
+      expect(service.consumeSessionNotice()).toBe('');
+    });
+  });
+
   it('faz login na URL configurada e persiste a sessão', () => {
     setup();
     let result: unknown;

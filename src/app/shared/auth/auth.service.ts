@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../api-config';
+import { getApiErrorMessage } from '../api-error';
 import { map, tap } from 'rxjs/operators';
 
 export interface AuthCredentials {
@@ -55,6 +56,7 @@ export class AuthService {
   private readonly apiUrl = `${inject(API_BASE_URL)}/api/auth`;
   private readonly session = signal<AuthSession | null>(this.restoreSession());
   readonly session$ = computed(() => this.session());
+  private readonly sessionNotice = signal('');
 
   constructor(private readonly http: HttpClient) {}
 
@@ -100,7 +102,21 @@ export class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return Boolean(this.session()?.token);
+    const token = this.session()?.token;
+    return Boolean(token) && !this.isTokenExpired(token as string);
+  }
+
+  /** Encerra a sessão por expiração/invalidade do token e deixa um aviso para a tela de login. */
+  expireSession(): void {
+    this.logout();
+    this.sessionNotice.set('Sua sessão expirou. Entre novamente para continuar.');
+  }
+
+  /** Devolve (e limpa) o aviso pendente de sessão expirada. */
+  consumeSessionNotice(): string {
+    const notice = this.sessionNotice();
+    this.sessionNotice.set('');
+    return notice;
   }
 
   currentSession(): AuthSession | null {
@@ -112,26 +128,7 @@ export class AuthService {
   }
 
   getErrorMessage(error: unknown, fallback: string): string {
-    if (typeof error === 'object' && error !== null) {
-      const responseError = (error as { error?: unknown }).error;
-
-      if (typeof responseError === 'string' && responseError.trim()) {
-        return responseError;
-      }
-
-      if (responseError && typeof responseError === 'object') {
-        const message = (responseError as { message?: string }).message;
-        if (message) {
-          return message;
-        }
-      }
-    }
-
-    if (error instanceof Error && error.message) {
-      return error.message;
-    }
-
-    return fallback;
+    return getApiErrorMessage(error, fallback);
   }
 
   private persistSession(session: AuthSession): void {
@@ -157,6 +154,20 @@ export class AuthService {
       console.warn('Invalid auth session found in storage', error);
       localStorage.removeItem(this.storageKey);
       return null;
+    }
+  }
+
+  /** Lê o `exp` do JWT (sem validar assinatura); tokens ilegíveis são tratados como não expirados. */
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) {
+        return false;
+      }
+      const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      return typeof json.exp === 'number' && json.exp * 1000 <= Date.now();
+    } catch {
+      return false;
     }
   }
 
