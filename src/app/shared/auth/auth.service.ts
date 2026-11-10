@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../api-config';
 import { map, tap } from 'rxjs/operators';
 
 export interface AuthCredentials {
@@ -51,7 +52,7 @@ export interface PasswordResetPayload {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly storageKey = 'projectflow_auth_session';
-  private readonly apiUrl = 'http://localhost:8080/api/auth';
+  private readonly apiUrl = `${inject(API_BASE_URL)}/api/auth`;
   private readonly session = signal<AuthSession | null>(this.restoreSession());
   readonly session$ = computed(() => this.session());
 

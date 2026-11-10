@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../shared/api-config';
 import { map } from 'rxjs/operators';
 import { AuthService } from '../shared/auth/auth.service';
 import { CreateProjectPayload, Project } from './project.model';
@@ -27,7 +28,7 @@ type ProjectApiResponse = Omit<Project, 'dataCriado' | 'ultimaAlteracao' | 'ulti
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
-  private readonly baseUrl = 'http://localhost:8080/api/projects';
+  private readonly baseUrl = `${inject(API_BASE_URL)}/api/projects`;
 
   constructor(private readonly http: HttpClient, private readonly authService: AuthService) {}
 

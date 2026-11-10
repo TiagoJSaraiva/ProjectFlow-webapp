@@ -1,11 +1,12 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../shared/api-config';
 import { ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectBoardService {
-	private readonly baseUrl = 'http://localhost:8080/api/projects';
+	private readonly baseUrl = `${inject(API_BASE_URL)}/api/projects`;
 
 	constructor(private readonly http: HttpClient) {}
 
