@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { Project } from '../projects/project.model';
@@ -24,6 +24,7 @@ interface LocalDateTimeLike {
   standalone: true,
   imports: [],
   templateUrl: './landing-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './landing-page.component.css'
 })
 export class LandingPageComponent implements OnInit, OnDestroy {

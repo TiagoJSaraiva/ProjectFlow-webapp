@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../shared/auth/auth.service';
@@ -8,6 +8,7 @@ import { AuthService } from '../shared/auth/auth.service';
   standalone: true,
   imports: [ReactiveFormsModule],
   templateUrl: './register.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './register.component.css'
 })
 export class RegisterComponent implements OnInit {

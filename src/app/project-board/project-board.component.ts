@@ -1,16 +1,17 @@
 import {
-	AfterViewInit,
-	Component,
-	ElementRef,
-	HostListener,
-	Injector,
-	OnDestroy,
-	OnInit,
-	ViewChild,
-	computed,
-	effect,
-	inject,
-	signal
+  AfterViewInit,
+  Component,
+  ElementRef,
+  HostListener,
+  Injector,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -30,6 +31,7 @@ type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
 	standalone: true,
 	imports: [FormsModule],
 	templateUrl: './project-board.component.html',
+	changeDetection: ChangeDetectionStrategy.Eager,
 	styleUrl: './project-board.component.css'
 })
 export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../shared/auth/auth.service';
@@ -8,6 +8,7 @@ import { AuthService } from '../shared/auth/auth.service';
   standalone: true,
   imports: [ReactiveFormsModule],
   templateUrl: './reset-password.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reset-password.component.css'
 })
 export class ResetPasswordComponent implements OnInit {

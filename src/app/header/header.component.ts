@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../shared/auth/auth.service';
 
@@ -7,6 +7,7 @@ import { AuthService } from '../shared/auth/auth.service';
   standalone: true,
   imports: [RouterModule],
   templateUrl: './header.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './header.component.css'
 })
 export class HeaderComponent {
