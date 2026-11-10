@@ -18,6 +18,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import Konva from 'konva';
 import { Subject, takeUntil } from 'rxjs';
 import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
+import { ProjectSyncService } from '../projects/project-sync.service';
 import { ProjectBoardService } from './project-board.service';
 
 const DEFAULT_RECT = { width: 200, height: 120 };
@@ -70,6 +71,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
 	private readonly injector = inject(Injector);
+	private readonly projectSync = inject(ProjectSyncService);
 	private readonly viewportEffect = effect(
 		() => {
 			const state = this.state();
@@ -371,6 +373,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.subscribe({
 				next: (response) => {
 					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
+					this.announceProjectSnapshot(response, 'save');
 					afterSave?.();
 				},
 				error: () => {
@@ -518,7 +521,10 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.loadDiagram(projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
-				next: (response) => this.hydrateState(response, true, null),
+				next: (response) => {
+					this.hydrateState(response, true, null);
+					this.announceProjectSnapshot(response, 'load');
+				},
 				error: () => this.updateState({ isLoading: false, statusMessage: 'Não foi possível carregar o projeto.' })
 			});
 	}
@@ -543,6 +549,20 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			isDeleting: false,
 			isLoading: false,
 			statusMessage
+		});
+	}
+
+	private announceProjectSnapshot(response: ProjectDiagramResponse, reason: 'load' | 'save'): void {
+		if (!response?.projectId) {
+			return;
+		}
+		const timestamp = new Date().toISOString();
+		this.projectSync.emit({
+			id: response.projectId,
+			nome: response.projectName ?? undefined,
+			descricao: response.projectDescription ?? undefined,
+			ultimoAcesso: timestamp,
+			ultimaAlteracao: reason === 'save' ? timestamp : undefined
 		});
 	}
 
