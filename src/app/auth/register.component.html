@@ -8,25 +8,31 @@
         Nome completo
         <input type="text" formControlName="nome" placeholder="Maria Silva" />
       </label>
-      <div class="field-error" *ngIf="form.controls.nome.touched && form.controls.nome.invalid">
-        Informe um nome entre 2 e 100 caracteres.
-      </div>
+      @if (form.controls.nome.touched && form.controls.nome.invalid) {
+        <div class="field-error">
+          Informe um nome entre 2 e 100 caracteres.
+        </div>
+      }
 
       <label>
         Email
         <input type="email" formControlName="email" placeholder="voce@email.com" />
       </label>
-      <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
-        Informe um email válido.
-      </div>
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <div class="field-error">
+          Informe um email válido.
+        </div>
+      }
 
       <label>
         Senha
         <input type="password" formControlName="senha" placeholder="Mínimo 6 caracteres" />
       </label>
-      <div class="field-error" *ngIf="form.controls.senha.touched && form.controls.senha.invalid">
-        A senha deve ter pelo menos 6 caracteres.
-      </div>
+      @if (form.controls.senha.touched && form.controls.senha.invalid) {
+        <div class="field-error">
+          A senha deve ter pelo menos 6 caracteres.
+        </div>
+      }
 
       <label>
         Confirmar senha
@@ -37,8 +43,12 @@
         {{ isSubmitting ? 'Criando...' : 'Criar conta' }}
       </button>
 
-      <p class="field-error" *ngIf="errorMessage">{{ errorMessage }}</p>
-      <p class="success" *ngIf="successMessage">{{ successMessage }}</p>
+      @if (errorMessage) {
+        <p class="field-error">{{ errorMessage }}</p>
+      }
+      @if (successMessage) {
+        <p class="success">{{ successMessage }}</p>
+      }
     </form>
 
     <button type="button" class="secondary" (click)="voltarParaLogin()">

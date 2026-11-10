@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -23,7 +22,7 @@ interface LocalDateTimeLike {
 @Component({
   selector: 'app-landing-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './landing-page.component.html',
   styleUrl: './landing-page.component.css'
 })

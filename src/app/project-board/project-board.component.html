@@ -1,161 +1,183 @@
 <div class="board-shell" [class.loading]="state().isLoading">
-	<header class="board-header">
-		<div class="header-left">
-			<button class="ghost" type="button" (click)="goBack()">Voltar pro menu</button>
-			<button
-				type="button"
-				class="ghost danger"
-				(click)="deleteProject()"
-				[disabled]="state().isDeleting"
-			>
-				{{ state().isDeleting ? 'Apagando...' : 'Apagar projeto' }}
-			</button>
-		</div>
-		<div class="header-right">
-			<span class="status" [class.dirty]="state().isDirty" [class.error]="isErrorStatus()">
-				{{ state().statusMessage ? state().statusMessage : state().isDirty ? 'Alterações não salvas' : 'Tudo sincronizado' }}
-			</span>
-			<button type="button" class="primary" (click)="onSave()" [disabled]="!state().isDirty || state().isSaving">
-				{{ state().isSaving ? 'Salvando...' : 'Salvar' }}
-			</button>
-		</div>
-	</header>
+  <header class="board-header">
+    <div class="header-left">
+      <button class="ghost" type="button" (click)="goBack()">Voltar pro menu</button>
+      <button
+        type="button"
+        class="ghost danger"
+        (click)="deleteProject()"
+        [disabled]="state().isDeleting"
+        >
+        {{ state().isDeleting ? 'Apagando...' : 'Apagar projeto' }}
+      </button>
+    </div>
+    <div class="header-right">
+      <span class="status" [class.dirty]="state().isDirty" [class.error]="isErrorStatus()">
+        {{ state().statusMessage ? state().statusMessage : state().isDirty ? 'Alterações não salvas' : 'Tudo sincronizado' }}
+      </span>
+      <button type="button" class="primary" (click)="onSave()" [disabled]="!state().isDirty || state().isSaving">
+        {{ state().isSaving ? 'Salvando...' : 'Salvar' }}
+      </button>
+    </div>
+  </header>
 
-	<div class="board-body">
-		<aside class="board-sidebar">
-			<div class="sidebar-header">
-				<div class="tabs" *ngIf="!state().selectedNodeId">
-					<button type="button" [class.active]="effectiveSidebarMode() === 'catalog'" (click)="setSidebarMode('catalog')">Catálogo</button>
-					<button type="button" [class.active]="effectiveSidebarMode() === 'project'" (click)="setSidebarMode('project')">Projeto</button>
-				</div>
-			</div>
+  <div class="board-body">
+    <aside class="board-sidebar">
+      <div class="sidebar-header">
+        @if (!state().selectedNodeId) {
+          <div class="tabs">
+            <button type="button" [class.active]="effectiveSidebarMode() === 'catalog'" (click)="setSidebarMode('catalog')">Catálogo</button>
+            <button type="button" [class.active]="effectiveSidebarMode() === 'project'" (click)="setSidebarMode('project')">Projeto</button>
+          </div>
+        }
+      </div>
 
-			<section *ngIf="effectiveSidebarMode() === 'catalog'" class="sidebar-section">
-				<h3>Elementos</h3>
-				<p>Arraste para o canvas para adicionar um elemento. Tudo começa com <em>Sample text</em>.</p>
-				<div class="palette">
-					<button
-						type="button"
-						draggable="true"
-						(dragstart)="onPaletteDragStart($event, 'RECTANGLE')"
-						class="palette-item rectangle"
-					>
-						<span>Retângulo</span>
-					</button>
-					<button
-						type="button"
-						draggable="true"
-						(dragstart)="onPaletteDragStart($event, 'CIRCLE')"
-						class="palette-item circle"
-					>
-						<span>Círculo</span>
-					</button>
-				</div>
-				<div class="hint">
-					<strong>Dica:</strong> use o botão "Criar conexão" nas propriedades do elemento para ligar blocos.
-				</div>
-			</section>
+      @if (effectiveSidebarMode() === 'catalog') {
+        <section class="sidebar-section">
+          <h3>Elementos</h3>
+          <p>Arraste para o canvas para adicionar um elemento. Tudo começa com <em>Sample text</em>.</p>
+          <div class="palette">
+            <button
+              type="button"
+              draggable="true"
+              (dragstart)="onPaletteDragStart($event, 'RECTANGLE')"
+              class="palette-item rectangle"
+              >
+              <span>Retângulo</span>
+            </button>
+            <button
+              type="button"
+              draggable="true"
+              (dragstart)="onPaletteDragStart($event, 'CIRCLE')"
+              class="palette-item circle"
+              >
+              <span>Círculo</span>
+            </button>
+          </div>
+          <div class="hint">
+            <strong>Dica:</strong> use o botão "Criar conexão" nas propriedades do elemento para ligar blocos.
+          </div>
+        </section>
+      }
 
-			<section *ngIf="effectiveSidebarMode() === 'project'" class="sidebar-section">
-				<h3>Sobre o projeto</h3>
-				<label>
-					<span>Nome</span>
-					<input type="text" maxlength="100" [ngModel]="state().projectName" (ngModelChange)="onProjectNameChange($event)" />
-				</label>
-				<label>
-					<span>Descrição</span>
-					<textarea rows="5" maxlength="10000" [ngModel]="state().projectDescription" (ngModelChange)="onProjectDescriptionChange($event)"></textarea>
-				</label>
-			</section>
+      @if (effectiveSidebarMode() === 'project') {
+        <section class="sidebar-section">
+          <h3>Sobre o projeto</h3>
+          <label>
+            <span>Nome</span>
+            <input type="text" maxlength="100" [ngModel]="state().projectName" (ngModelChange)="onProjectNameChange($event)" />
+          </label>
+          <label>
+            <span>Descrição</span>
+            <textarea rows="5" maxlength="10000" [ngModel]="state().projectDescription" (ngModelChange)="onProjectDescriptionChange($event)"></textarea>
+          </label>
+        </section>
+      }
 
-			<section *ngIf="effectiveSidebarMode() === 'node' && selectedNode() as node" class="sidebar-section">
-				<h3>Elemento selecionado</h3>
-				<label>
-					<span>Título</span>
-					<input type="text" maxlength="35" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" />
-				</label>
-				<label>
-					<span>Descrição</span>
-					<textarea rows="4" maxlength="500" [ngModel]="node.description" (ngModelChange)="updateNodeField('description', $event)"></textarea>
-				</label>
-				<div class="actions">
-					<button type="button" class="secondary" (click)="startLinkWorkflow(node.id)">Criar conexão</button>
-					<button type="button" class="ghost" (click)="deleteNode(node.id)">Remover</button>
-				</div>
-				<div class="connections" *ngIf="selectedConnections().length > 0">
-					<h4>Conexões</h4>
-					<ul>
-						<li *ngFor="let connection of selectedConnections(); trackBy: trackByConnection">
-							<span>{{ resolveNodeLabel(connection.fromNodeId) }} → {{ resolveNodeLabel(connection.toNodeId) }}</span>
-							<button type="button" class="ghost" (click)="deleteConnection(connection.id)">Excluir</button>
-						</li>
-					</ul>
-				</div>
-				<button type="button" class="ghost" (click)="clearSelection()">Voltar ao catálogo</button>
-			</section>
-		</aside>
+      @if (effectiveSidebarMode() === 'node' && selectedNode(); as node) {
+        <section class="sidebar-section">
+          <h3>Elemento selecionado</h3>
+          <label>
+            <span>Título</span>
+            <input type="text" maxlength="35" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" />
+          </label>
+          <label>
+            <span>Descrição</span>
+            <textarea rows="4" maxlength="500" [ngModel]="node.description" (ngModelChange)="updateNodeField('description', $event)"></textarea>
+          </label>
+          <div class="actions">
+            <button type="button" class="secondary" (click)="startLinkWorkflow(node.id)">Criar conexão</button>
+            <button type="button" class="ghost" (click)="deleteNode(node.id)">Remover</button>
+          </div>
+          @if (selectedConnections().length > 0) {
+            <div class="connections">
+              <h4>Conexões</h4>
+              <ul>
+                @for (connection of selectedConnections(); track trackByConnection($index, connection)) {
+                  <li>
+                    <span>{{ resolveNodeLabel(connection.fromNodeId) }} → {{ resolveNodeLabel(connection.toNodeId) }}</span>
+                    <button type="button" class="ghost" (click)="deleteConnection(connection.id)">Excluir</button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+          <button type="button" class="ghost" (click)="clearSelection()">Voltar ao catálogo</button>
+        </section>
+      }
+    </aside>
 
-		<div class="board-canvas">
-			<div class="canvas-toolbar">
-				<p>Zoom com a roda do mouse. Arraste o fundo para movimentar o diagrama.</p>
-			</div>
-			<div class="link-indicator" *ngIf="linkModeActive()">
-				<span>Escolha outro elemento para concluir a conexão.</span>
-				<button type="button" (click)="cancelLinkWorkflow()">Cancelar</button>
-			</div>
-			<div #stageContainer class="stage-container"></div>
-		</div>
-	</div>
+    <div class="board-canvas">
+      <div class="canvas-toolbar">
+        <p>Zoom com a roda do mouse. Arraste o fundo para movimentar o diagrama.</p>
+      </div>
+      @if (linkModeActive()) {
+        <div class="link-indicator">
+          <span>Escolha outro elemento para concluir a conexão.</span>
+          <button type="button" (click)="cancelLinkWorkflow()">Cancelar</button>
+        </div>
+      }
+      <div #stageContainer class="stage-container"></div>
+    </div>
+  </div>
 
-	<div class="modal-overlay" *ngIf="deleteDialogOpen()">
-		<div class="modal-card">
-			<h3>Deseja apagar este projeto?</h3>
-			<p>Esta ação não pode ser desfeita.</p>
-			<div class="modal-actions equal-width">
-				<button type="button" class="ghost danger" (click)="confirmDeleteProject()" [disabled]="state().isDeleting">
-					{{ state().isDeleting ? 'Apagando...' : 'Sim' }}
-				</button>
-				<button type="button" class="secondary" (click)="cancelDeleteProject()">Não</button>
-			</div>
-		</div>
-	</div>
+  @if (deleteDialogOpen()) {
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <h3>Deseja apagar este projeto?</h3>
+        <p>Esta ação não pode ser desfeita.</p>
+        <div class="modal-actions equal-width">
+          <button type="button" class="ghost danger" (click)="confirmDeleteProject()" [disabled]="state().isDeleting">
+            {{ state().isDeleting ? 'Apagando...' : 'Sim' }}
+          </button>
+          <button type="button" class="secondary" (click)="cancelDeleteProject()">Não</button>
+        </div>
+      </div>
+    </div>
+  }
 
-	<div class="modal-overlay" *ngIf="reloadDialogOpen()">
-		<div class="modal-card">
-			<h3>Deseja recarregar a página?</h3>
-			<p>É possível que alterações feitas não sejam salvas.</p>
-			<div class="modal-actions equal-width">
-				<button type="button" class="primary" (click)="confirmReload()">Recarregar</button>
-				<button type="button" class="secondary" (click)="cancelReloadDialog()">Cancelar</button>
-			</div>
-		</div>
-	</div>
+  @if (reloadDialogOpen()) {
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <h3>Deseja recarregar a página?</h3>
+        <p>É possível que alterações feitas não sejam salvas.</p>
+        <div class="modal-actions equal-width">
+          <button type="button" class="primary" (click)="confirmReload()">Recarregar</button>
+          <button type="button" class="secondary" (click)="cancelReloadDialog()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
 
-	<div class="modal-overlay" *ngIf="unsavedDialogOpen()">
-		<div class="modal-card">
-			<h3>O Projeto possui alterações não salvas</h3>
-			<p>Escolha como deseja continuar antes de sair.</p>
-			<div class="modal-actions stacked">
-				<button
-					type="button"
-					class="primary"
-					(click)="onUnsavedDialogAction('save')"
-					[disabled]="state().isSaving"
-				>
-					{{ state().isSaving ? 'Salvando...' : 'Salvar e sair' }}
-				</button>
-				<button type="button" class="ghost danger" (click)="onUnsavedDialogAction('discard')" [disabled]="state().isSaving">
-					Sair sem salvar
-				</button>
-				<button type="button" class="secondary" (click)="onUnsavedDialogAction('cancel')" [disabled]="state().isSaving">
-					Cancelar
-				</button>
-			</div>
-		</div>
-	</div>
+  @if (unsavedDialogOpen()) {
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <h3>O Projeto possui alterações não salvas</h3>
+        <p>Escolha como deseja continuar antes de sair.</p>
+        <div class="modal-actions stacked">
+          <button
+            type="button"
+            class="primary"
+            (click)="onUnsavedDialogAction('save')"
+            [disabled]="state().isSaving"
+            >
+            {{ state().isSaving ? 'Salvando...' : 'Salvar e sair' }}
+          </button>
+          <button type="button" class="ghost danger" (click)="onUnsavedDialogAction('discard')" [disabled]="state().isSaving">
+            Sair sem salvar
+          </button>
+          <button type="button" class="secondary" (click)="onUnsavedDialogAction('cancel')" [disabled]="state().isSaving">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 
-	<div class="loading-overlay" *ngIf="state().isLoading">
-		<div class="spinner"></div>
-		<span>Carregando diagrama...</span>
-	</div>
+  @if (state().isLoading) {
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+      <span>Carregando diagrama...</span>
+    </div>
+  }
 </div>

@@ -3,12 +3,11 @@
     <img src="assets/logo.png" alt="ProjectFlow Logo">
   </div>
   <div class="login">
-    <ng-container *ngIf="isAuthenticated; else loginButton">
+    @if (isAuthenticated) {
       <span class="user-name">Olá, {{ userName || 'usuário' }}</span>
       <button type="button" class="logout-btn" (click)="logout()">Sair</button>
-    </ng-container>
-    <ng-template #loginButton>
+    } @else {
       <button class="login-btn" routerLink="/login">Login</button>
-    </ng-template>
+    }
   </div>
 </div>

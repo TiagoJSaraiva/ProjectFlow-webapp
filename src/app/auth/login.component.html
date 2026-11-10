@@ -8,37 +8,49 @@
         Email
         <input type="email" formControlName="email" placeholder="voce@email.com" />
       </label>
-      <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
-        Informe um email válido.
-      </div>
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <div class="field-error">
+          Informe um email válido.
+        </div>
+      }
 
       <label>
         Senha
         <input type="password" formControlName="senha" placeholder="••••••••" />
       </label>
-      <div class="field-error" *ngIf="form.controls.senha.touched && form.controls.senha.invalid">
-        A senha é obrigatória.
-      </div>
+      @if (form.controls.senha.touched && form.controls.senha.invalid) {
+        <div class="field-error">
+          A senha é obrigatória.
+        </div>
+      }
 
       <button type="submit" [disabled]="isSubmitting">
         {{ isSubmitting ? 'Entrando...' : 'Entrar' }}
       </button>
 
-      <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
-      <div class="verify-hint" *ngIf="unverifiedEmail">
-        <p>
-          Reenviamos instruções para <strong>{{ unverifiedEmail }}</strong>? Caso não tenha encontrado o email,
-          solicite um novo envio ou abra a página de confirmação.
-        </p>
-        <button type="button" class="pill" (click)="resendVerification()" [disabled]="isResending">
-          {{ isResending ? 'Reenviando...' : 'Reenviar email de confirmação' }}
-        </button>
-        <button type="button" class="pill ghost" (click)="goToVerify()">
-          Ver instruções de confirmação
-        </button>
-        <p class="status success" *ngIf="resendStatus === 'success'">{{ resendMessage }}</p>
-        <p class="status error" *ngIf="resendStatus === 'error'">{{ resendMessage }}</p>
-      </div>
+      @if (errorMessage) {
+        <p class="error-message">{{ errorMessage }}</p>
+      }
+      @if (unverifiedEmail) {
+        <div class="verify-hint">
+          <p>
+            Reenviamos instruções para <strong>{{ unverifiedEmail }}</strong>? Caso não tenha encontrado o email,
+            solicite um novo envio ou abra a página de confirmação.
+          </p>
+          <button type="button" class="pill" (click)="resendVerification()" [disabled]="isResending">
+            {{ isResending ? 'Reenviando...' : 'Reenviar email de confirmação' }}
+          </button>
+          <button type="button" class="pill ghost" (click)="goToVerify()">
+            Ver instruções de confirmação
+          </button>
+          @if (resendStatus === 'success') {
+            <p class="status success">{{ resendMessage }}</p>
+          }
+          @if (resendStatus === 'error') {
+            <p class="status error">{{ resendMessage }}</p>
+          }
+        </div>
+      }
     </form>
 
     <button type="button" class="text-link" (click)="goToRecover()">

@@ -6,15 +6,21 @@
       Abra sua caixa de entrada e clique em "Confirmar email".
     </p>
 
-    <div class="status verifying" *ngIf="verifying">
-      Validando token de confirmação...
-    </div>
-    <div class="status success" *ngIf="verificationStatus === 'success'">
-      {{ verificationMessage }}
-    </div>
-    <div class="status error" *ngIf="verificationStatus === 'error'">
-      {{ verificationMessage }}
-    </div>
+    @if (verifying) {
+      <div class="status verifying">
+        Validando token de confirmação...
+      </div>
+    }
+    @if (verificationStatus === 'success') {
+      <div class="status success">
+        {{ verificationMessage }}
+      </div>
+    }
+    @if (verificationStatus === 'error') {
+      <div class="status error">
+        {{ verificationMessage }}
+      </div>
+    }
 
     <section class="resend-section">
       <h2>Não recebeu o email?</h2>
@@ -25,17 +31,23 @@
           Email
           <input type="email" formControlName="email" placeholder="voce@email.com" />
         </label>
-        <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
-          Informe um email válido.
-        </div>
+        @if (form.controls.email.touched && form.controls.email.invalid) {
+          <div class="field-error">
+            Informe um email válido.
+          </div>
+        }
 
         <button type="submit" [disabled]="isResending">
           {{ isResending ? 'Enviando...' : 'Reenviar email de confirmação' }}
         </button>
       </form>
 
-      <p class="status success" *ngIf="resendStatus === 'success'">{{ resendMessage }}</p>
-      <p class="status error" *ngIf="resendStatus === 'error'">{{ resendMessage }}</p>
+      @if (resendStatus === 'success') {
+        <p class="status success">{{ resendMessage }}</p>
+      }
+      @if (resendStatus === 'error') {
+        <p class="status error">{{ resendMessage }}</p>
+      }
     </section>
 
     <button type="button" class="secondary" (click)="goToLogin()">

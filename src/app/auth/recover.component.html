@@ -8,17 +8,23 @@
         Email
         <input type="email" formControlName="email" placeholder="voce@email.com" />
       </label>
-      <div class="field-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
-        Informe um email válido.
-      </div>
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <div class="field-error">
+          Informe um email válido.
+        </div>
+      }
 
       <button type="submit" [disabled]="isSubmitting">
         {{ isSubmitting ? 'Enviando...' : 'Enviar instruções' }}
       </button>
     </form>
 
-    <p class="success-message" *ngIf="successMessage">{{ successMessage }}</p>
-    <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+    @if (successMessage) {
+      <p class="success-message">{{ successMessage }}</p>
+    }
+    @if (errorMessage) {
+      <p class="error-message">{{ errorMessage }}</p>
+    }
 
     <button type="button" class="link-button" (click)="tenhoCodigo()">
       Já tenho o código

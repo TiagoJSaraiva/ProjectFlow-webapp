@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import {
 	AfterViewInit,
 	Component,
@@ -29,7 +28,7 @@ type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
 @Component({
 	selector: 'app-project-board',
 	standalone: true,
-	imports: [CommonModule, FormsModule],
+	imports: [FormsModule],
 	templateUrl: './project-board.component.html',
 	styleUrl: './project-board.component.css'
 })
