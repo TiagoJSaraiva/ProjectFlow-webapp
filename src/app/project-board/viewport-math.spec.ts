@@ -1,4 +1,4 @@
-import { canvasToWorld, clampZoom, zoomViewportAt } from './viewport-math';
+import { canvasToWorld, clampZoom, fitViewport, zoomViewportAt } from './viewport-math';
 
 describe('viewport-math', () => {
   const viewport = { zoom: 1, offsetX: 100, offsetY: 50, gridSize: 64 };
@@ -21,5 +21,16 @@ describe('viewport-math', () => {
     expect(zoomed.zoom).toBe(2);
     expect(after.x).toBeCloseTo(before.x);
     expect(after.y).toBeCloseTo(before.y);
+  });
+
+  it('ajusta o viewport para enquadrar e centralizar o conteúdo', () => {
+    const bounds = { minX: 0, minY: 0, maxX: 1000, maxY: 500 };
+    const fitted = fitViewport(bounds, { width: 1000, height: 600 }, viewport, 0);
+    expect(fitted.zoom).toBe(1);
+    expect(fitted.offsetX).toBe(0);
+    expect(fitted.offsetY).toBe(50);
+
+    const small = fitViewport(bounds, { width: 500, height: 600 }, viewport, 0);
+    expect(small.zoom).toBe(0.5);
   });
 });

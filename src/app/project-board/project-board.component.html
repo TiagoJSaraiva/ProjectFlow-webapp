@@ -35,12 +35,13 @@
       @if (effectiveSidebarMode() === 'catalog') {
         <section class="sidebar-section">
           <h3>Elementos</h3>
-          <p>Arraste para o canvas para adicionar um elemento. Tudo começa com <em>Sample text</em>.</p>
+          <p>Arraste para o canvas ou clique/Enter para adicionar um elemento. Tudo começa com <em>Sample text</em>.</p>
           <div class="palette">
             <button
               type="button"
               draggable="true"
               (dragstart)="onPaletteDragStart($event, 'RECTANGLE')"
+              (click)="addNodeAtCenter('RECTANGLE')"
               class="palette-item rectangle"
               >
               <span>Retângulo</span>
@@ -49,6 +50,7 @@
               type="button"
               draggable="true"
               (dragstart)="onPaletteDragStart($event, 'CIRCLE')"
+              (click)="addNodeAtCenter('CIRCLE')"
               class="palette-item circle"
               >
               <span>Círculo</span>
@@ -57,6 +59,14 @@
           <div class="hint">
             <strong>Dica:</strong> use o botão "Criar conexão" nas propriedades do elemento para ligar blocos.
           </div>
+          @if (nodes().length) {
+            <h3>No diagrama</h3>
+            <ul class="node-list">
+              @for (item of nodes(); track item.id) {
+                <li><button type="button" class="ghost" (click)="selectNodeById(item.id)">{{ item.name || 'Sample text' }}</button></li>
+              }
+            </ul>
+          }
         </section>
       }
 
@@ -79,7 +89,7 @@
           <h3>Elemento selecionado</h3>
           <label>
             <span>Título</span>
-            <input type="text" [attr.maxlength]="nodeNameMaxLength" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" aria-describedby="node-name-hint" />
+            <input id="node-title-input" type="text" [attr.maxlength]="nodeNameMaxLength" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" aria-describedby="node-name-hint" />
             <small id="node-name-hint" class="field-hint" [class.limit]="node.name.length >= nodeNameMaxLength">
               {{ node.name.length >= nodeNameMaxLength ? 'Limite de ' + nodeNameMaxLength + ' caracteres atingido.' : node.name.length + '/' + nodeNameMaxLength }}
             </small>
@@ -111,16 +121,24 @@
     </aside>
 
     <div class="board-canvas">
-      <div class="canvas-toolbar">
-        <p>Zoom com a roda do mouse. Arraste o fundo para movimentar o diagrama.</p>
-      </div>
+      <app-board-toolbar
+        [canUndo]="canUndo()"
+        [canRedo]="canRedo()"
+        [zoomPercent]="zoomPercent()"
+        (undo)="undo()"
+        (redo)="redo()"
+        (zoomIn)="zoomBy(1.2)"
+        (zoomOut)="zoomBy(1 / 1.2)"
+        (fit)="fitToContent()"
+        (shortcuts)="shortcutsOpen.set(true)"
+      />
       @if (linkModeActive()) {
         <div class="link-indicator">
           <span>Escolha outro elemento para concluir a conexão.</span>
           <button type="button" (click)="cancelLinkWorkflow()">Cancelar</button>
         </div>
       }
-      <div #stageContainer class="stage-container"></div>
+      <div #stageContainer class="stage-container" tabindex="0" role="group" aria-label="Área do diagrama. Use [ e ] para selecionar elementos, setas para mover e Delete para excluir."></div>
     </div>
   </div>
 
@@ -153,6 +171,16 @@
       (action)="onUnsavedDialogAction($any($event))"
       (dismissed)="onUnsavedDialogAction('cancel')"
     />
+  }
+
+  @if (shortcutsOpen()) {
+    <app-dialog title="Atalhos de teclado" [actions]="closeActions" (action)="shortcutsOpen.set(false)" (dismissed)="shortcutsOpen.set(false)">
+      <dl class="shortcut-list">
+        @for (item of shortcuts; track item.keys) {
+          <div><dt><kbd>{{ item.keys }}</kbd></dt><dd>{{ item.description }}</dd></div>
+        }
+      </dl>
+    </app-dialog>
   }
 
   @if (state().isLoading) {

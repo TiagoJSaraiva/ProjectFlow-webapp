@@ -85,4 +85,93 @@ describe('DiagramStore', () => {
     expect(payload.project).toEqual({ name: 'Novo nome', description: 'Desc' });
     expect(payload.nodes.length).toBe(2);
   });
+
+  describe('desfazer / refazer', () => {
+    it('não há nada para desfazer logo após carregar', () => {
+      expect(store.canUndo()).toBeFalse();
+      expect(store.canRedo()).toBeFalse();
+    });
+
+    it('desfaz e refaz a criação de um nó', () => {
+      store.addNode('CIRCLE', { x: 0, y: 0 });
+      expect(store.nodes().length).toBe(3);
+      store.undo();
+      expect(store.nodes().length).toBe(2);
+      expect(store.canRedo()).toBeTrue();
+      store.redo();
+      expect(store.nodes().length).toBe(3);
+    });
+
+    it('desfaz mover (posição e dobra das conexões voltam)', () => {
+      store.moveNode('b', 20, 400);
+      store.undo();
+      expect(store.nodes()[1].x).toBe(300);
+      expect(store.connections()[0].bendPoint).toEqual({ x: 300, y: 0 });
+    });
+
+    it('agrupa a digitação do título em um único passo de desfazer', () => {
+      store.selectNode('a');
+      store.updateSelectedNodeField('name', 'N');
+      store.updateSelectedNodeField('name', 'No');
+      store.updateSelectedNodeField('name', 'Nov');
+      expect(store.selectedNode()!.name).toBe('Nov');
+      store.undo();
+      expect(store.nodes()[0].name).toBe('A');
+      expect(store.canUndo()).toBeFalse();
+    });
+
+    it('desfaz conectar e excluir', () => {
+      store.startLink('b');
+      store.completeConnection('a');
+      expect(store.connections().length).toBe(2);
+      store.undo();
+      expect(store.connections().length).toBe(1);
+
+      store.deleteNode('a');
+      expect(store.nodes().length).toBe(1);
+      store.undo();
+      expect(store.nodes().length).toBe(2);
+      expect(store.connections().length).toBe(1);
+    });
+
+    it('uma nova alteração depois de desfazer descarta o refazer', () => {
+      store.addNode('RECTANGLE', { x: 0, y: 0 });
+      store.undo();
+      store.addNode('CIRCLE', { x: 5, y: 5 });
+      expect(store.canRedo()).toBeFalse();
+    });
+
+    it('desfazer remove a seleção de um nó que deixou de existir', () => {
+      const node = store.addNode('RECTANGLE', { x: 0, y: 0 });
+      expect(store.state().selectedNodeId).toBe(node.id);
+      store.undo();
+      expect(store.state().selectedNodeId).toBeNull();
+    });
+
+    it('setas movem o nó selecionado e agrupam em um passo', () => {
+      store.selectNode('a');
+      store.moveSelectedBy(10, 0);
+      store.moveSelectedBy(10, 0);
+      expect(store.nodes()[0].x).toBe(20);
+      store.undo();
+      expect(store.nodes()[0].x).toBe(0);
+    });
+
+    it('recarregar o projeto limpa o histórico', () => {
+      store.addNode('RECTANGLE', { x: 0, y: 0 });
+      store.hydrate(RESPONSE, true, null);
+      expect(store.canUndo()).toBeFalse();
+    });
+
+    it('navega entre nós com selectAdjacent', () => {
+      store.selectAdjacent(1);
+      expect(store.state().selectedNodeId).toBe('a');
+      store.selectAdjacent(1);
+      expect(store.state().selectedNodeId).toBe('b');
+      store.selectAdjacent(1);
+      expect(store.state().selectedNodeId).toBe('a');
+      store.selectAdjacent(-1);
+      expect(store.state().selectedNodeId).toBe('b');
+    });
+  });
 });

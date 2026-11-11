@@ -24,3 +24,21 @@ export function zoomViewportAt(viewport: DiagramViewport, pointer: DiagramPoint,
 		offsetY: pointer.y - anchor.y * zoom
 	};
 }
+
+/** Viewport que enquadra `bounds` (coordenadas do diagrama) dentro de um canvas `size`, com margem. */
+export function fitViewport(
+	bounds: { minX: number; minY: number; maxX: number; maxY: number },
+	size: { width: number; height: number },
+	current: DiagramViewport,
+	padding = 48
+): DiagramViewport {
+	const width = Math.max(bounds.maxX - bounds.minX, 1);
+	const height = Math.max(bounds.maxY - bounds.minY, 1);
+	const zoom = clampZoom(Math.min((size.width - padding * 2) / width, (size.height - padding * 2) / height));
+	return {
+		...current,
+		zoom,
+		offsetX: (size.width - width * zoom) / 2 - bounds.minX * zoom,
+		offsetY: (size.height - height * zoom) / 2 - bounds.minY * zoom
+	};
+}

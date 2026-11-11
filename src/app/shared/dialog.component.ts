@@ -42,6 +42,7 @@ let nextDialogId = 0;
         @if (message()) {
           <p [id]="messageId">{{ message() }}</p>
         }
+        <div class="body"><ng-content /></div>
         <div class="actions" [class.stacked]="stacked()">
           @for (item of actions(); track item.value) {
             <button type="button" [class]="item.kind ?? 'secondary'" [disabled]="item.disabled" (click)="action.emit(item.value)">
@@ -84,6 +85,10 @@ let nextDialogId = 0;
       margin: 0 0 1.5rem;
       color: rgba(255, 255, 255, 0.75);
       line-height: 1.4;
+    }
+    .body:not(:empty) {
+      margin: 0 0 1.5rem;
+      text-align: left;
     }
     .actions {
       display: flex;

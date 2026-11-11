@@ -18,19 +18,35 @@ import { Subject, takeUntil } from 'rxjs';
 import { ProjectRepository } from '../data/project-repository';
 import { getApiErrorMessage } from '../shared/api-error';
 import { DialogAction, DialogComponent } from '../shared/dialog.component';
+import { BoardToolbarComponent } from './board-toolbar.component';
+import { nodesBounds } from './connection-geometry';
 import { NODE_NAME_MAX_LENGTH } from './diagram-constants';
 import { DiagramRenderer } from './diagram-renderer';
 import { DiagramStore } from './diagram-store';
 import { DiagramNode, DiagramNodeType } from './project-board.model';
+import { fitViewport, zoomViewportAt } from './viewport-math';
 
 type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
 
 const PALETTE_MIME = 'application/x-projectflow-node';
 
+/** Atalhos de teclado exibidos na ajuda (tecla + descrição). */
+const SHORTCUTS: { keys: string; description: string }[] = [
+	{ keys: 'Ctrl+S', description: 'Salvar o projeto' },
+	{ keys: 'Ctrl+Z', description: 'Desfazer' },
+	{ keys: 'Ctrl+Y ou Ctrl+Shift+Z', description: 'Refazer' },
+	{ keys: '[ e ]', description: 'Selecionar o elemento anterior / seguinte' },
+	{ keys: 'Setas', description: 'Mover o elemento selecionado (Shift move mais)' },
+	{ keys: 'Delete ou Backspace', description: 'Excluir o elemento selecionado' },
+	{ keys: 'Enter', description: 'Editar o título do elemento selecionado (ou concluir a conexão)' },
+	{ keys: 'C', description: 'Criar conexão a partir do elemento selecionado' },
+	{ keys: 'Esc', description: 'Cancelar a ação atual / limpar a seleção' }
+];
+
 @Component({
 	selector: 'app-project-board',
 	standalone: true,
-	imports: [FormsModule, DialogComponent],
+	imports: [FormsModule, DialogComponent, BoardToolbarComponent],
 	providers: [DiagramStore],
 	templateUrl: './project-board.component.html',
 	changeDetection: ChangeDetectionStrategy.Eager,
@@ -51,11 +67,16 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	readonly effectiveSidebarMode = this.store.effectiveSidebarMode;
 	readonly selectedConnections = this.store.selectedConnections;
 	readonly linkModeActive = this.store.linkModeActive;
+	readonly nodes = this.store.nodes;
+	readonly canUndo = this.store.canUndo;
+	readonly canRedo = this.store.canRedo;
 	readonly nodeNameMaxLength = NODE_NAME_MAX_LENGTH;
+	readonly shortcuts = SHORTCUTS;
 
 	readonly deleteDialogOpen = signal(false);
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
+	readonly shortcutsOpen = signal(false);
 
 	private renderer?: DiagramRenderer;
 	private readonly destroy$ = new Subject<void>();
@@ -213,6 +234,58 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		return Array.from(types as ArrayLike<string>).includes(PALETTE_MIME) || Boolean(this.paletteDragType);
 	}
 
+	// --- Histórico, zoom e ajuda ------------------------------------------------------------
+
+	undo(): void {
+		this.store.undo();
+	}
+
+	redo(): void {
+		this.store.redo();
+	}
+
+	zoomPercent(): number {
+		return Math.round(this.store.viewport().zoom * 100);
+	}
+
+	zoomBy(factor: number): void {
+		const size = this.renderer?.viewSize();
+		if (!size) {
+			return;
+		}
+		const viewport = this.store.viewport();
+		this.store.setViewport(zoomViewportAt(viewport, { x: size.width / 2, y: size.height / 2 }, viewport.zoom * factor));
+		this.store.markDirty();
+	}
+
+	fitToContent(): void {
+		const size = this.renderer?.viewSize();
+		const bounds = nodesBounds(this.store.nodes());
+		if (!size || !bounds) {
+			return;
+		}
+		this.store.setViewport(fitViewport(bounds, size, this.store.viewport()));
+		this.store.markDirty();
+	}
+
+	/** Adiciona um nó no centro da área visível (alternativa ao arrastar: teclado e toque). */
+	addNodeAtCenter(type: DiagramNodeType): void {
+		const size = this.renderer?.viewSize();
+		if (!size) {
+			return;
+		}
+		const viewport = this.store.viewport();
+		const jitter = (this.store.nodes().length % 5) * 24;
+		this.store.addNode(type, {
+			x: (size.width / 2 - viewport.offsetX) / viewport.zoom + jitter,
+			y: (size.height / 2 - viewport.offsetY) / viewport.zoom + jitter
+		});
+	}
+
+	selectNodeById(nodeId: string): void {
+		this.store.selectNode(nodeId);
+	}
+
 	// --- Persistência --------------------------------------------------------------------
 
 	onSave(afterSave?: () => void, onError?: () => void): void {
@@ -357,12 +430,99 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 	@HostListener('window:keydown', ['$event'])
 	handleWindowKeydown(event: KeyboardEvent): void {
-		if (!this.store.state().isDirty) {
+		if (this.store.state().isDirty) {
+			const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
+			if (isReloadShortcut) {
+				this.unloadIntent = 'reload';
+			}
+		}
+		this.handleEditorShortcut(event);
+	}
+
+	private handleEditorShortcut(event: KeyboardEvent): void {
+		if (this.deleteDialogOpen() || this.unsavedDialogOpen() || this.reloadDialogOpen() || this.shortcutsOpen()) {
+			return; // os diálogos tratam o próprio teclado
+		}
+		const key = event.key.toLowerCase();
+		const mod = event.ctrlKey || event.metaKey;
+		const target = event.target as HTMLElement | null;
+		const typing = Boolean(target?.closest('input, textarea, select, [contenteditable="true"]'));
+
+		if (mod && key === 's') {
+			event.preventDefault();
+			if (this.store.state().isDirty) {
+				this.onSave();
+			}
 			return;
 		}
-		const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
-		if (isReloadShortcut) {
-			this.unloadIntent = 'reload';
+		if (mod && key === 'z' && !event.shiftKey) {
+			if (!typing) {
+				event.preventDefault();
+				this.undo();
+			}
+			return;
+		}
+		if (mod && (key === 'y' || (key === 'z' && event.shiftKey))) {
+			if (!typing) {
+				event.preventDefault();
+				this.redo();
+			}
+			return;
+		}
+		if (typing || mod || event.altKey) {
+			if (key === 'escape' && typing) {
+				(target as HTMLElement).blur();
+			}
+			return;
+		}
+
+		const selected = this.store.selectedNode();
+		switch (event.key) {
+			case 'Escape':
+				if (this.store.linkModeActive()) {
+					this.store.cancelLink();
+				} else {
+					this.store.clearSelection();
+				}
+				return;
+			case 'Delete':
+			case 'Backspace':
+				if (selected) {
+					event.preventDefault();
+					this.store.deleteNode(selected.id);
+				}
+				return;
+			case 'ArrowLeft':
+			case 'ArrowRight':
+			case 'ArrowUp':
+			case 'ArrowDown': {
+				if (!selected) {
+					return;
+				}
+				event.preventDefault();
+				const step = event.shiftKey ? 50 : 10;
+				const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+				const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+				this.store.moveSelectedBy(dx, dy);
+				return;
+			}
+			case '[':
+			case ']':
+				this.store.selectAdjacent(event.key === ']' ? 1 : -1);
+				return;
+			case 'Enter':
+				if (selected && this.store.linkModeActive()) {
+					this.store.completeConnection(selected.id);
+				} else if (selected && !target?.closest('button, a')) {
+					document.getElementById('node-title-input')?.focus();
+				}
+				return;
+			case 'c':
+			case 'C':
+				if (selected) {
+					this.store.startLink(selected.id);
+				}
+				return;
 		}
 	}
 
@@ -441,6 +601,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		{ value: 'yes', label: 'Sim', kind: 'danger', disabled: this.store.state().isDeleting },
 		{ value: 'no', label: 'Não', kind: 'secondary' }
 	];
+	readonly closeActions: DialogAction[] = [{ value: 'close', label: 'Fechar', kind: 'primary' }];
 	readonly reloadActions: DialogAction[] = [
 		{ value: 'reload', label: 'Recarregar', kind: 'primary' },
 		{ value: 'cancel', label: 'Cancelar', kind: 'secondary' }

@@ -75,6 +75,11 @@ export class DiagramRenderer {
 		return { x: (clientX - bounds.left - viewport.offsetX) / viewport.zoom, y: (clientY - bounds.top - viewport.offsetY) / viewport.zoom };
 	}
 
+	/** Tamanho visível do canvas em pixels. */
+	viewSize(): { width: number; height: number } {
+		return { width: this.container.clientWidth, height: this.container.clientHeight };
+	}
+
 	isInside(clientX: number, clientY: number): boolean {
 		const bounds = this.container.getBoundingClientRect();
 		return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom;

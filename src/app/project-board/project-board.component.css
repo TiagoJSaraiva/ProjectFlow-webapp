@@ -304,3 +304,28 @@ button:hover:not(:disabled) {
 .field-hint.limit {
   color: #f7d046;
 }
+
+.node-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.35rem;
+}
+
+.shortcut-list {
+	margin: 0;
+	display: grid;
+	gap: 0.6rem;
+}
+
+.shortcut-list div {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.shortcut-list dt,
+.shortcut-list dd {
+	margin: 0;
+}

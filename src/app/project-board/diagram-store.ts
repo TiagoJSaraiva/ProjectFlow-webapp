@@ -1,6 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { generateId } from '../shared/ids';
 import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
+import { History } from './diagram-history';
 import { DEFAULT_RADIUS, DEFAULT_RECT, DEFAULT_VIEWPORT, NODE_NAME_MAX_LENGTH } from './diagram-constants';
 import {
 	DiagramConnection,
@@ -36,11 +37,20 @@ function initialState(): ProjectBoardState {
 	};
 }
 
+interface DiagramSnapshot {
+	nodes: DiagramNode[];
+	connections: DiagramConnection[];
+}
+
 /** Estado do diagrama aberto no board e as operações de edição sobre ele (sem Konva nem HTTP). */
 @Injectable()
 export class DiagramStore {
 	readonly state = signal<ProjectBoardState>(initialState());
 	private readonly statusError = signal(false);
+	private readonly history = new History<DiagramSnapshot>();
+	private readonly historyVersion = signal(0);
+	readonly canUndo = computed(() => (this.historyVersion(), this.history.canUndo));
+	readonly canRedo = computed(() => (this.historyVersion(), this.history.canRedo));
 
 	readonly nodes = computed(() => this.state().nodes);
 	readonly connections = computed(() => this.state().connections);
@@ -57,6 +67,46 @@ export class DiagramStore {
 	readonly linkModeActive = computed(() => Boolean(this.state().linkSourceId));
 	readonly isErrorStatus = computed(() => this.statusError() && Boolean(this.state().statusMessage));
 
+	/** Guarda o diagrama atual no histórico (chame ANTES de alterá-lo). */
+	private record(key: string | null = null): void {
+		const { nodes, connections } = this.state();
+		this.history.record({ nodes, connections }, key);
+		this.historyVersion.update((v) => v + 1);
+	}
+
+	/** Encerra o agrupamento de alterações (ex.: ao terminar de digitar ou soltar uma tecla). */
+	breakHistoryGroup(): void {
+		this.history.breakGroup();
+	}
+
+	undo(): void {
+		this.restore(this.history.undo(this.currentSnapshot()));
+	}
+
+	redo(): void {
+		this.restore(this.history.redo(this.currentSnapshot()));
+	}
+
+	private currentSnapshot(): DiagramSnapshot {
+		const { nodes, connections } = this.state();
+		return { nodes, connections };
+	}
+
+	private restore(snapshot: DiagramSnapshot | null): void {
+		if (!snapshot) {
+			return;
+		}
+		this.historyVersion.update((v) => v + 1);
+		this.state.update((current) => ({
+			...current,
+			nodes: snapshot.nodes,
+			connections: snapshot.connections,
+			selectedNodeId: snapshot.nodes.some((n) => n.id === current.selectedNodeId) ? current.selectedNodeId : null,
+			linkSourceId: snapshot.nodes.some((n) => n.id === current.linkSourceId) ? current.linkSourceId : null,
+			isDirty: true
+		}));
+	}
+
 	patch(patch: Partial<ProjectBoardState>): void {
 		this.state.update((current) => ({ ...current, ...patch }));
 	}
@@ -69,6 +119,8 @@ export class DiagramStore {
 
 	hydrate(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
 		this.statusError.set(false);
+		this.history.clear();
+		this.historyVersion.update((v) => v + 1);
 		this.state.set({
 			projectId: response.projectId,
 			projectName: response.projectName ?? 'Projeto sem nome',
@@ -106,10 +158,12 @@ export class DiagramStore {
 	}
 
 	selectNode(nodeId: string): void {
+		this.history.breakGroup();
 		this.patch({ selectedNodeId: nodeId });
 	}
 
 	clearSelection(): void {
+		this.history.breakGroup();
 		this.patch({ selectedNodeId: null, linkSourceId: null, sidebarMode: 'catalog' });
 	}
 
@@ -140,6 +194,7 @@ export class DiagramStore {
 	}
 
 	addNode(type: DiagramNodeType, position: DiagramPoint): DiagramNode {
+		this.record();
 		const node: DiagramNode = {
 			id: generateId(),
 			type,
@@ -170,6 +225,7 @@ export class DiagramStore {
 			return;
 		}
 		const normalized = typeof value === 'number' ? value : field === 'name' ? truncateNodeName(value) : value;
+		this.record(`field:${selected}:${field}`);
 		this.state.update((current) => ({
 			...current,
 			nodes: current.nodes.map((node) => (node.id === selected ? ({ ...node, [field]: normalized } as DiagramNode) : node)),
@@ -178,7 +234,8 @@ export class DiagramStore {
 	}
 
 	/** Move o nó e recalcula o ponto de dobra das conexões ligadas a ele. */
-	moveNode(nodeId: string, x: number, y: number): void {
+	moveNode(nodeId: string, x: number, y: number, groupKey: string | null = null): void {
+		this.record(groupKey);
 		this.state.update((current) => {
 			const nodes = current.nodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node));
 			return { ...current, nodes, connections: recomputeBendPoints(current.connections, nodes, nodeId), isDirty: true };
@@ -186,6 +243,7 @@ export class DiagramStore {
 	}
 
 	deleteNode(nodeId: string): void {
+		this.record();
 		this.state.update((current) => ({
 			...current,
 			nodes: current.nodes.filter((node) => node.id !== nodeId),
@@ -197,6 +255,7 @@ export class DiagramStore {
 	}
 
 	deleteConnection(connectionId: string): void {
+		this.record();
 		this.state.update((current) => ({
 			...current,
 			connections: current.connections.filter((conn) => conn.id !== connectionId),
@@ -216,6 +275,7 @@ export class DiagramStore {
 		if (!source || !target) {
 			return;
 		}
+		this.record();
 		const connection: DiagramConnection = {
 			id: generateId(),
 			fromNodeId: sourceId,
@@ -229,6 +289,25 @@ export class DiagramStore {
 			linkSourceId: null,
 			isDirty: true
 		}));
+	}
+
+	/** Move o nó selecionado `dx`/`dy` (atalhos de seta); movimentos seguidos formam um único passo. */
+	moveSelectedBy(dx: number, dy: number): void {
+		const node = this.selectedNode();
+		if (node) {
+			this.moveNode(node.id, node.x + dx, node.y + dy, `move:${node.id}`);
+		}
+	}
+
+	/** Seleciona o nó seguinte/anterior na ordem de criação (navegação por teclado). */
+	selectAdjacent(step: 1 | -1): void {
+		const nodes = this.state().nodes;
+		if (!nodes.length) {
+			return;
+		}
+		const index = nodes.findIndex((n) => n.id === this.state().selectedNodeId);
+		const next = index === -1 ? (step === 1 ? 0 : nodes.length - 1) : (index + step + nodes.length) % nodes.length;
+		this.selectNode(nodes[next].id);
 	}
 
 	resolveNodeLabel(nodeId: string): string {
