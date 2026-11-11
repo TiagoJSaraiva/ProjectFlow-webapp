@@ -1,4 +1,5 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { DEMO_MODE } from '../shared/api-config';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../shared/auth/auth.service';
 
@@ -11,6 +12,8 @@ import { AuthService } from '../shared/auth/auth.service';
   styleUrl: './header.component.css'
 })
 export class HeaderComponent {
+  readonly demoMode = inject(DEMO_MODE);
+
   constructor(
     private readonly authService: AuthService,
     private readonly router: Router

@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree, provideRouter } from '@angular/router';
+import { DEMO_MODE } from '../api-config';
 import { authGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
@@ -22,6 +23,7 @@ describe('authGuard', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        { provide: DEMO_MODE, useValue: false },
         { provide: AuthService, useValue: authStub }
       ]
     });
@@ -55,5 +57,20 @@ describe('authGuard', () => {
     const result = run();
     expect(authStub.expireSession).toHaveBeenCalled();
     expect(router.serializeUrl(result as UrlTree)).toBe('/login');
+  });
+
+  it('no modo demonstração libera o acesso sem sessão', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: DEMO_MODE, useValue: true },
+        { provide: AuthService, useValue: authStub }
+      ]
+    });
+    authStub.isAuthenticated.and.returnValue(false);
+    expect(run()).toBeTrue();
   });
 });

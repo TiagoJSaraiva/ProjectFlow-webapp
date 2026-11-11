@@ -3,7 +3,9 @@
     <img src="assets/logo.png" alt="ProjectFlow Logo">
   </div>
   <div class="login">
-    @if (isAuthenticated) {
+    @if (demoMode) {
+      <span class="user-name">Demonstração</span>
+    } @else if (isAuthenticated) {
       <span class="user-name">Olá, {{ userName || 'usuário' }}</span>
       <button type="button" class="logout-btn" (click)="logout()">Sair</button>
     } @else {
