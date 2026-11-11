@@ -206,19 +206,11 @@ button:hover:not(:disabled) {
 	flex-direction: column;
 }
 
-.canvas-toolbar {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 0.75rem 1.5rem;
-	font-size: 0.85rem;
-	color: rgba(255, 255, 255, 0.6);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
 .stage-container {
 	flex: 1;
 	position: relative;
+	min-height: 360px;
+	touch-action: none;
 	background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 45%),
 		radial-gradient(circle at 80% 0%, rgba(255, 215, 102, 0.08), transparent 50%),
 		linear-gradient(180deg, #05060a 0%, #020204 80%);
@@ -337,4 +329,99 @@ button:hover:not(:disabled) {
 
 .size-fields label {
 	flex: 1;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.stage-container:focus-visible {
+	outline: 3px solid #ffffff;
+	outline-offset: 2px;
+}
+
+.empty-hint,
+.load-error {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 4;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-width: min(420px, 90%);
+	padding: 1rem 1.25rem;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.8);
+	background: rgba(7, 8, 12, 0.85);
+	border: 1px dashed rgba(247, 208, 70, 0.4);
+	border-radius: 1rem;
+}
+
+.empty-hint {
+	pointer-events: none;
+}
+
+.load-error {
+	border-style: solid;
+	border-color: rgba(255, 122, 122, 0.6);
+}
+
+.load-error p {
+	margin: 0;
+}
+
+.load-error .actions {
+	display: flex;
+	gap: 0.5rem;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+
+@media (pointer: coarse) {
+	button,
+	.sidebar-section input {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 900px) {
+	.board-header {
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		padding: 0.75rem 1rem;
+	}
+
+	.header-left,
+	.header-right {
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.board-body {
+		flex-direction: column;
+	}
+
+	.board-canvas {
+		order: -1;
+	}
+
+	.stage-container {
+		min-height: 60vh;
+	}
+
+	.board-sidebar {
+		width: 100%;
+		padding: 1rem;
+		border-right: none;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	.link-indicator {
+		top: auto;
+		right: 0.75rem;
+		bottom: 0.75rem;
+		left: 0.75rem;
+		justify-content: space-between;
+	}
 }

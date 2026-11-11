@@ -23,7 +23,7 @@
       <p class="success-message">{{ successMessage }}</p>
     }
     @if (errorMessage) {
-      <p class="error-message">{{ errorMessage }}</p>
+      <p class="error-message" role="alert">{{ errorMessage }}</p>
     }
 
     <button type="button" class="link-button" (click)="tenhoCodigo()">

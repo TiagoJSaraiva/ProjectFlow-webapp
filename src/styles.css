@@ -14,3 +14,8 @@ body {
 button {
   font-family: inherit;
 }
+
+:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}

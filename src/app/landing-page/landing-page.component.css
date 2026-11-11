@@ -201,3 +201,31 @@
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 	}
 }
+
+.error p {
+  margin: 0 0 0.5rem;
+}
+
+.retry {
+  min-height: 40px;
+  padding: 0 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: #000;
+  background: #ffd500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.success {
+  margin-top: 1rem;
+  color: #9be29b;
+}
+
+.project-card:focus-visible,
+.retry:focus-visible,
+.cta:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}

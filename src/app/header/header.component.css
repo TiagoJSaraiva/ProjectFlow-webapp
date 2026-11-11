@@ -41,3 +41,21 @@
   margin-right: 12px;
   font-weight: 500;
 }
+
+@media (max-width: 480px) {
+  .header {
+    padding: 8px 12px;
+  }
+
+  .login button,
+  .logout-btn,
+  .login-btn {
+    padding: 8px 16px;
+    margin-right: 0;
+  }
+
+  .user-name {
+    margin-right: 8px;
+    font-size: 0.9rem;
+  }
+}

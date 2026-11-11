@@ -97,11 +97,13 @@ export class DiagramRenderer {
 	private isPanning = false;
 	private panStart: { x: number; y: number } | null = null;
 	private viewportStart: DiagramViewport | null = null;
+	private lastPinch: { distance: number; center: { x: number; y: number } } | null = null;
 
 	constructor(
 		private readonly container: HTMLDivElement,
 		private readonly events: RendererEvents
 	) {
+		Konva.hitOnDragEnabled = true; // permite gestos de 2 dedos mesmo com um nó sendo arrastado
 		this.stage = new Konva.Stage({ container, width: container.clientWidth, height: container.clientHeight });
 		this.gridLayer.add(this.gridGroup);
 		this.connectionLayer.add(this.connectionGroup);
@@ -114,7 +116,19 @@ export class DiagramRenderer {
 
 		this.stage.on('mousedown touchstart', (evt) => this.onPointerDown(evt.target));
 		this.stage.on('mouseup touchend mouseleave', () => this.finishPan());
-		this.stage.on('mousemove touchmove', () => this.onPointerMove());
+		this.stage.on('mousemove touchmove', (evt) => {
+			if ('touches' in evt.evt && (evt.evt as TouchEvent).touches.length >= 2) {
+				this.onPinch(evt.evt as TouchEvent);
+				return;
+			}
+			this.onPointerMove();
+		});
+		this.stage.on('touchend touchcancel', (evt) => {
+			if (this.lastPinch && (evt.evt as TouchEvent).touches.length < 2) {
+				this.lastPinch = null;
+				this.events.viewportCommit();
+			}
+		});
 		this.stage.on('wheel', (evt) => this.onWheel(evt));
 		this.stage.on('click tap', (evt) => {
 			if (this.isBackground(evt.target)) {
@@ -340,6 +354,31 @@ export class DiagramRenderer {
 			this.viewportStart = null;
 			this.events.viewportCommit();
 		}
+	}
+
+	/** Gesto de pinça: aproxima/afasta (zoom) e arrasta (pan) com dois dedos. */
+	private onPinch(event: TouchEvent): void {
+		event.preventDefault();
+		// Dois dedos nunca arrastam um nó nem fazem pan de um dedo.
+		Konva.DD.node?.stopDrag();
+		this.isPanning = false;
+		this.panStart = null;
+		this.viewportStart = null;
+
+		const bounds = this.container.getBoundingClientRect();
+		const [a, b] = [event.touches[0], event.touches[1]];
+		const center = { x: (a.clientX + b.clientX) / 2 - bounds.left, y: (a.clientY + b.clientY) / 2 - bounds.top };
+		const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+		if (this.lastPinch && this.lastPinch.distance > 0) {
+			const viewport = this.events.getViewport();
+			const zoomed = zoomViewportAt(viewport, this.lastPinch.center, viewport.zoom * (distance / this.lastPinch.distance));
+			this.events.viewportChange({
+				...zoomed,
+				offsetX: zoomed.offsetX + (center.x - this.lastPinch.center.x),
+				offsetY: zoomed.offsetY + (center.y - this.lastPinch.center.y)
+			});
+		}
+		this.lastPinch = { distance, center };
 	}
 
 	private onWheel(evt: Konva.KonvaEventObject<WheelEvent>): void {

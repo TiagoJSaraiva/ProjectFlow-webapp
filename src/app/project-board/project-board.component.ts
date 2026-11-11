@@ -79,6 +79,8 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
 	readonly shortcutsOpen = signal(false);
+	/** Mensagem de falha ao carregar o projeto (mostra painel com "Tentar novamente"). */
+	readonly loadError = signal<string | null>(null);
 
 	private renderer?: DiagramRenderer;
 	private readonly destroy$ = new Subject<void>();
@@ -377,15 +379,26 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			});
 	}
 
+	retryLoad(): void {
+		const projectId = this.store.state().projectId;
+		if (projectId) {
+			this.loadDiagram(projectId);
+		}
+	}
+
 	private loadDiagram(projectId: string): void {
+		this.loadError.set(null);
 		this.store.patch({ isLoading: true, projectId });
 		this.repository
 			.loadDiagram(projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: (response) => this.store.hydrate(response, true, null),
-				error: (error: unknown) =>
-					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível carregar o projeto.'), true, { isLoading: false })
+				error: (error: unknown) => {
+					const message = getApiErrorMessage(error, 'Não foi possível carregar o projeto.');
+					this.loadError.set(message);
+					this.store.setStatus(message, true, { isLoading: false });
+				}
 			});
 	}
 

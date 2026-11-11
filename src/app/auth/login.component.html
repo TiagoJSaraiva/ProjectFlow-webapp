@@ -33,7 +33,7 @@
       </button>
 
       @if (errorMessage) {
-        <p class="error-message">{{ errorMessage }}</p>
+        <p class="error-message" role="alert">{{ errorMessage }}</p>
       }
       @if (unverifiedEmail) {
         <div class="verify-hint">

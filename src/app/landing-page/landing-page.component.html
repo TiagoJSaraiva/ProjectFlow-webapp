@@ -48,10 +48,16 @@
           </div>
         }
       } @else {
-        <div class="loading-state">Carregando projetos...</div>
+        <div class="loading-state" role="status" aria-live="polite">Carregando projetos...</div>
       }
       @if (errorMessage) {
-        <p class="error">{{ errorMessage }}</p>
+        <div class="error" role="alert">
+          <p>{{ errorMessage }}</p>
+          <button type="button" class="retry" (click)="loadProjects()">Tentar novamente</button>
+        </div>
+      }
+      @if (successMessage) {
+        <p class="success" role="status">{{ successMessage }}</p>
       }
     </div>
   </section>

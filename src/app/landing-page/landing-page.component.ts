@@ -32,6 +32,7 @@ export class LandingPageComponent implements OnInit, OnDestroy {
   isLoading = false;
   isCreating = false;
   errorMessage = '';
+  successMessage = '';
   private projectCounter = 1;
   private readonly destroy$ = new Subject<void>();
 
@@ -91,6 +92,7 @@ export class LandingPageComponent implements OnInit, OnDestroy {
         this.projects = this.sortProjects([normalizedProject, ...this.projects]);
         this.projectCounter = this.computeNextProjectNumber(this.projects);
         this.isCreating = false;
+        this.flashSuccess(`Projeto "${normalizedProject.nome}" criado.`);
         this.loadProjects({ silent: true });
       },
       error: (error: unknown) => {
@@ -98,6 +100,15 @@ export class LandingPageComponent implements OnInit, OnDestroy {
         this.isCreating = false;
       }
     });
+  }
+
+  private flashSuccess(message: string): void {
+    this.successMessage = message;
+    setTimeout(() => {
+      if (this.successMessage === message) {
+        this.successMessage = '';
+      }
+    }, 4000);
   }
 
   openProject(project: Project): void {

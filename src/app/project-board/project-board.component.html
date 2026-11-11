@@ -12,7 +12,7 @@
       </button>
     </div>
     <div class="header-right">
-      <span class="status" [class.dirty]="state().isDirty" [class.error]="isErrorStatus()">
+      <span class="status" role="status" aria-live="polite" [class.dirty]="state().isDirty" [class.error]="isErrorStatus()">
         {{ state().statusMessage ? state().statusMessage : state().isDirty ? 'Alterações não salvas' : 'Tudo sincronizado' }}
       </span>
       <button type="button" class="primary" (click)="onSave()" [disabled]="!state().isDirty || state().isSaving">
@@ -158,6 +158,21 @@
           <button type="button" (click)="cancelLinkWorkflow()">Cancelar</button>
         </div>
       }
+      @if (!state().isLoading && !loadError() && nodes().length === 0) {
+        <div class="empty-hint" role="note">
+          <strong>Diagrama vazio.</strong>
+          <span>Arraste um elemento da lista ou use os botões "Retângulo" e "Círculo" para começar.</span>
+        </div>
+      }
+      @if (loadError(); as message) {
+        <div class="load-error" role="alert">
+          <p>{{ message }}</p>
+          <div class="actions">
+            <button type="button" class="primary" (click)="retryLoad()">Tentar novamente</button>
+            <button type="button" class="secondary" (click)="goBack()">Voltar aos projetos</button>
+          </div>
+        </div>
+      }
       <div #stageContainer class="stage-container" tabindex="0" role="group" aria-label="Área do diagrama. Use [ e ] para selecionar elementos, setas para mover e Delete para excluir."></div>
     </div>
   </div>
@@ -206,7 +221,7 @@
   @if (state().isLoading) {
     <div class="loading-overlay">
       <div class="spinner"></div>
-      <span>Carregando diagrama...</span>
+      <span role="status">Carregando diagrama...</span>
     </div>
   }
 </div>
