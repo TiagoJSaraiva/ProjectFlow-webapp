@@ -421,7 +421,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.delete(state.projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
-				next: () => this.router.navigateByUrl('/'),
+				next: () => {
+					// Projeto apagado: não há mais o que salvar, então a saída não deve pedir confirmação.
+					this.store.patch({ isDirty: false, isDeleting: false });
+					this.router.navigateByUrl('/');
+				},
 				error: (error: unknown) =>
 					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível apagar o projeto.'), true, { isDeleting: false })
 			});
