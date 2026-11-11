@@ -208,12 +208,6 @@ export class DiagramStore {
 		this.patch({ linkSourceId: null });
 	}
 
-	markDirty(): void {
-		if (!this.state().isDirty) {
-			this.patch({ isDirty: true });
-		}
-	}
-
 	setViewport(viewport: DiagramViewport): void {
 		this.patch({ viewport });
 	}
@@ -342,6 +336,11 @@ export class DiagramStore {
 	completeConnection(targetNodeId: string): void {
 		const sourceId = this.state().linkSourceId;
 		if (!sourceId || sourceId === targetNodeId) {
+			return;
+		}
+		if (this.state().connections.some((c) => c.fromNodeId === sourceId && c.toNodeId === targetNodeId)) {
+			this.patch({ linkSourceId: null });
+			this.flash('Já existe uma conexão entre esses dois elementos nessa direção.', true);
 			return;
 		}
 		const nodes = this.state().nodes;

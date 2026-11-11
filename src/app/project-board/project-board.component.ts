@@ -28,6 +28,7 @@ import { MAX_IMPORT_BYTES, exportFileBaseName, parseDiagramJson, serializeDiagra
 import { DiagramRenderer } from './diagram-renderer';
 import { DiagramStore } from './diagram-store';
 import { DiagramNode, DiagramNodeType } from './project-board.model';
+import { findFreePosition } from './node-placement';
 import { fitViewport, zoomViewportAt } from './viewport-math';
 
 type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
@@ -135,8 +136,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			nodeResize: (id, size) => this.previewResize(id, size),
 			nodeResizeEnd: (id, size) => this.store.resizeNode(id, size),
 			backgroundClick: () => this.store.clearSelection(),
-			viewportChange: (viewport) => this.store.setViewport(viewport),
-			viewportCommit: () => this.store.markDirty()
+			viewportChange: (viewport) => this.store.setViewport(viewport)
 		});
 		this.safely('initial', () => {
 			this.renderer?.setViewport(this.store.viewport());
@@ -265,7 +265,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		}
 		const viewport = this.store.viewport();
 		this.store.setViewport(zoomViewportAt(viewport, { x: size.width / 2, y: size.height / 2 }, viewport.zoom * factor));
-		this.store.markDirty();
 	}
 
 	fitToContent(): void {
@@ -275,7 +274,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			return;
 		}
 		this.store.setViewport(fitViewport(bounds, size, this.store.viewport()));
-		this.store.markDirty();
 	}
 
 	/** Adiciona um nó no centro da área visível (alternativa ao arrastar: teclado e toque). */
@@ -285,11 +283,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			return;
 		}
 		const viewport = this.store.viewport();
-		const jitter = (this.store.nodes().length % 5) * 24;
-		this.store.addNode(type, {
-			x: (size.width / 2 - viewport.offsetX) / viewport.zoom + jitter,
-			y: (size.height / 2 - viewport.offsetY) / viewport.zoom + jitter
-		});
+		const center = {
+			x: (size.width / 2 - viewport.offsetX) / viewport.zoom,
+			y: (size.height / 2 - viewport.offsetY) / viewport.zoom
+		};
+		this.store.addNode(type, findFreePosition(center, this.store.nodes(), type));
 	}
 
 	// --- Exportar / importar ---------------------------------------------------------------

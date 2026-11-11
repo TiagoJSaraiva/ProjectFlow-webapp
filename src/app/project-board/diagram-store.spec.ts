@@ -211,4 +211,17 @@ describe('DiagramStore', () => {
       expect(store.connections().length).toBe(1);
     });
   });
+
+  it('não cria conexão duplicada entre o mesmo par de nós na mesma direção', () => {
+    store.startLink('a');
+    store.completeConnection('b'); // já existe a -> b
+    expect(store.connections().length).toBe(1);
+    expect(store.state().linkSourceId).toBeNull();
+    expect(store.state().statusMessage).toContain('Já existe uma conexão');
+    expect(store.canUndo()).toBeFalse();
+
+    store.startLink('b');
+    store.completeConnection('a'); // direção oposta é permitida
+    expect(store.connections().length).toBe(2);
+  });
 });

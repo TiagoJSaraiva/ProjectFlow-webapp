@@ -115,6 +115,30 @@ describe('ProjectBoardComponent', () => {
     });
   });
 
+  describe('pequenos ajustes de edição', () => {
+    it('zoom e ajustar à tela não marcam o projeto como alterado', () => {
+      create();
+      component.zoomBy(1.2);
+      component.fitToContent();
+      expect(state().isDirty).toBeFalse();
+    });
+
+    it('nós criados pelos botões não nascem sobrepostos', () => {
+      create();
+      component.addNodeAtCenter('RECTANGLE');
+      component.addNodeAtCenter('RECTANGLE');
+      component.addNodeAtCenter('CIRCLE');
+      const added = state().nodes.slice(2);
+      expect(added.length).toBe(3);
+      for (let i = 0; i < added.length; i += 1) {
+        for (let j = i + 1; j < added.length; j += 1) {
+          const apart = Math.abs(added[i].x - added[j].x) >= 100 || Math.abs(added[i].y - added[j].y) >= 60;
+          expect(apart).toBeTrue();
+        }
+      }
+    });
+  });
+
   describe('salvar', () => {
     it('sucesso: fica limpo, mantém o histórico (desfazer) e a seleção', () => {
       repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));

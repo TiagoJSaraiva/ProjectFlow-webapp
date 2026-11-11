@@ -13,8 +13,7 @@ describe('DiagramRenderer', () => {
     nodeResize: () => undefined,
     nodeResizeEnd: () => undefined,
     backgroundClick: () => undefined,
-    viewportChange: () => undefined,
-    viewportCommit: () => undefined
+    viewportChange: () => undefined
   };
 
   const nodes: DiagramNode[] = [

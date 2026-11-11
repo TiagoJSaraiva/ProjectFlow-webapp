@@ -22,8 +22,6 @@ export interface RendererEvents {
 	backgroundClick(): void;
 	/** Pan/zoom em andamento (atualiza o viewport). */
 	viewportChange(viewport: DiagramViewport): void;
-	/** Pan/zoom concluído (conta como alteração do projeto). */
-	viewportCommit(): void;
 }
 
 const PALETTE = { fill: '#0f1115', stroke: '#393b46', activeStroke: '#f7d046', text: '#f3f3f3' };
@@ -126,7 +124,6 @@ export class DiagramRenderer {
 		this.stage.on('touchend touchcancel', (evt) => {
 			if (this.lastPinch && (evt.evt as TouchEvent).touches.length < 2) {
 				this.lastPinch = null;
-				this.events.viewportCommit();
 			}
 		});
 		this.stage.on('wheel', (evt) => this.onWheel(evt));
@@ -353,7 +350,6 @@ export class DiagramRenderer {
 			this.isPanning = false;
 			this.panStart = null;
 			this.viewportStart = null;
-			this.events.viewportCommit();
 		}
 	}
 
@@ -392,6 +388,5 @@ export class DiagramRenderer {
 		const viewport = this.events.getViewport();
 		const newScale = evt.evt.deltaY > 0 ? viewport.zoom / scaleBy : viewport.zoom * scaleBy;
 		this.events.viewportChange(zoomViewportAt(viewport, pointer, newScale));
-		this.events.viewportCommit();
 	}
 }
