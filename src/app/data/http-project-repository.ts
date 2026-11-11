@@ -1,10 +1,12 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { API_BASE_URL } from '../shared/api-config';
+import { ProjectDiagramResponse, SaveProjectDiagramPayload } from '../project-board/project-board.model';
+import { ProjectRepository } from './project-repository';
 import { map } from 'rxjs/operators';
 import { AuthService } from '../shared/auth/auth.service';
-import { CreateProjectPayload, Project } from './project.model';
+import { CreateProjectPayload, Project } from '../projects/project.model';
 
 type DateValue = string | number[] | LocalDateTimeLike | null | undefined;
 
@@ -27,15 +29,16 @@ type ProjectApiResponse = Omit<Project, 'dataCriado' | 'ultimaAlteracao' | 'ulti
 };
 
 @Injectable({ providedIn: 'root' })
-export class ProjectService {
+export class HttpProjectRepository extends ProjectRepository {
   private readonly baseUrl = `${inject(API_BASE_URL)}/api/projects`;
 
-  constructor(private readonly http: HttpClient, private readonly authService: AuthService) {}
+  private readonly http = inject(HttpClient);
+  private readonly authService = inject(AuthService);
 
-  listByCurrentUser(): Observable<Project[]> {
+  list(): Observable<Project[]> {
     const session = this.authService.currentSession();
     if (!session) {
-      throw new Error('Usuário não autenticado');
+      return throwError(() => new Error('Usuário não autenticado'));
     }
     return this.http.get<ProjectApiResponse[]>(`${this.baseUrl}/user/${session.userId}`).pipe(
       map((projects) =>
@@ -46,10 +49,10 @@ export class ProjectService {
     );
   }
 
-  createProjectWithName(name: string): Observable<Project> {
+  create(name: string): Observable<Project> {
     const session = this.authService.currentSession();
     if (!session) {
-      throw new Error('Usuário não autenticado');
+      return throwError(() => new Error('Usuário não autenticado'));
     }
 
     const payload: CreateProjectPayload = {
@@ -60,6 +63,18 @@ export class ProjectService {
     return this.http
       .post<ProjectApiResponse>(`${this.baseUrl}/user/${session.userId}`, payload)
       .pipe(map((project) => this.normalizeProjectDates(project)));
+  }
+
+  loadDiagram(projectId: string): Observable<ProjectDiagramResponse> {
+    return this.http.get<ProjectDiagramResponse>(`${this.baseUrl}/${projectId}/diagram`);
+  }
+
+  saveDiagram(projectId: string, payload: SaveProjectDiagramPayload): Observable<ProjectDiagramResponse> {
+    return this.http.put<ProjectDiagramResponse>(`${this.baseUrl}/${projectId}/diagram`, payload);
+  }
+
+  delete(projectId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${projectId}`);
   }
 
   private normalizeProjectDates(project: ProjectApiResponse): Project {

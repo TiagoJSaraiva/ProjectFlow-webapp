@@ -1,5 +1,6 @@
-// Configuração de produção. Por padrão a API é servida na mesma origem do app (proxy reverso).
+// Configuração de produção (build publicado no GitHub Pages): modo demonstração, sem servidor.
 export const environment = {
   production: true,
+  demoMode: true,
   apiUrl: ''
 };

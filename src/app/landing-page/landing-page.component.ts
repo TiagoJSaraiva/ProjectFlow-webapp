@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { Project } from '../projects/project.model';
-import { ProjectService } from '../projects/project.service';
+import { ProjectRepository } from '../data/project-repository';
 import { getApiErrorMessage } from '../shared/api-error';
 
 type DateInput = string | number | number[] | Date | LocalDateTimeLike | null | undefined;
@@ -36,7 +36,7 @@ export class LandingPageComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
 
   constructor(
-    private readonly projectService: ProjectService,
+    private readonly repository: ProjectRepository,
     private readonly router: Router
   ) {}
 
@@ -56,7 +56,7 @@ export class LandingPageComponent implements OnInit, OnDestroy {
     }
     this.errorMessage = '';
 
-    this.projectService.listByCurrentUser().subscribe({
+    this.repository.list().subscribe({
       next: (projects) => {
         const normalized = projects.map((project) => ({
           ...project,
@@ -85,7 +85,7 @@ export class LandingPageComponent implements OnInit, OnDestroy {
     this.isCreating = true;
     const projectName = `Projeto ${this.projectCounter}`;
 
-    this.projectService.createProjectWithName(projectName).subscribe({
+    this.repository.create(projectName).subscribe({
       next: (project) => {
         const normalizedProject = this.normalizeProject(project, projectName);
         this.projects = this.sortProjects([normalizedProject, ...this.projects]);

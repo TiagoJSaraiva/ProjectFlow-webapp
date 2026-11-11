@@ -20,7 +20,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
 import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
 import { getApiErrorMessage } from '../shared/api-error';
-import { ProjectBoardService } from './project-board.service';
+import { ProjectRepository } from '../data/project-repository';
 
 const DEFAULT_RECT = { width: 200, height: 120 };
 const DEFAULT_RADIUS = 64;
@@ -140,7 +140,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	constructor(
 		private readonly route: ActivatedRoute,
 		private readonly router: Router,
-		private readonly boardService: ProjectBoardService
+		private readonly repository: ProjectRepository
 	) {}
 
 	ngOnInit(): void {
@@ -385,7 +385,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		this.statusIsError.set(false);
 		this.updateState({ isSaving: true, statusMessage: 'Salvando alterações...' });
 		const payload = this.buildPayload();
-		this.boardService
+		this.repository
 			.saveDiagram(this.state().projectId, payload)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
@@ -441,8 +441,8 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		}
 		this.deleteDialogOpen.set(false);
 		this.updateState({ isDeleting: true, statusMessage: 'Apagando projeto...' });
-		this.boardService
-			.deleteProject(projectId)
+		this.repository
+			.delete(projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: () => this.router.navigateByUrl('/'),
@@ -553,7 +553,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 	private loadDiagram(projectId: string): void {
 		this.updateState({ isLoading: true, projectId });
-		this.boardService
+		this.repository
 			.loadDiagram(projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
