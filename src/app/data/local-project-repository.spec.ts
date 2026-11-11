@@ -133,6 +133,35 @@ describe('LocalProjectRepository', () => {
     expect(projects.length).toBe(2);
   });
 
+  it('dados corrompidos: preserva uma cópia sob outra chave e avisa o usuário', async () => {
+    storage.setItem(DEMO_STORAGE_KEY, '{quebrado');
+    const projects = await firstValueFrom(repo.list());
+    expect(projects.length).toBe(2);
+    const backupKey = [...storage.data.keys()].find((k) => k.startsWith(DEMO_STORAGE_KEY + '_unreadable_'))!;
+    expect(storage.data.get(backupKey)).toBe('{quebrado');
+    expect(repo.recoveryNotice()).toContain('cópia foi preservada');
+    repo.dismissRecoveryNotice();
+    expect(repo.recoveryNotice()).toBeNull();
+  });
+
+  it('versão diferente: não descarta em silêncio, preserva a cópia', async () => {
+    const other = JSON.stringify({ version: 2, projects: [], diagrams: {} });
+    storage.setItem(DEMO_STORAGE_KEY, other);
+    await firstValueFrom(repo.list());
+    const backupKey = [...storage.data.keys()].find((k) => k.startsWith(DEMO_STORAGE_KEY + '_unreadable_'))!;
+    expect(storage.data.get(backupKey)).toBe(other);
+    expect(repo.recoveryNotice()).not.toBeNull();
+  });
+
+  it('falha de cota na gravação inicial não quebra a leitura: usa os exemplos em memória e avisa', async () => {
+    storage.setItem = () => {
+      throw new DOMException('cheio', 'QuotaExceededError');
+    };
+    const projects = await firstValueFrom(repo.list());
+    expect(projects.length).toBe(2);
+    expect(repo.recoveryNotice()).toContain('armazenamento');
+  });
+
   it('informa erro claro quando o armazenamento está cheio', async () => {
     await firstValueFrom(repo.list());
     storage.setItem = () => {

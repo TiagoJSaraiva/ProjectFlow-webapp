@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, InjectionToken, inject } from '@angular/core';
+import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { Observable, defer, of } from 'rxjs';
 import { ProjectDiagramResponse, SaveProjectDiagramPayload } from '../project-board/project-board.model';
 import { Project } from '../projects/project.model';
@@ -54,6 +54,14 @@ const DEFAULT_VIEWPORT = { zoom: 1, offsetX: 0, offsetY: 0, gridSize: 64 };
 @Injectable({ providedIn: 'root' })
 export class LocalProjectRepository extends ProjectRepository {
   private readonly storage = inject(DEMO_STORAGE);
+  private readonly notice = signal<string | null>(null);
+  private preservedRaw: string | null = null;
+  /** Aviso discreto sobre dados ilegíveis ou armazenamento indisponível (mostrado no aviso da demo). */
+  readonly recoveryNotice = this.notice.asReadonly();
+
+  dismissRecoveryNotice(): void {
+    this.notice.set(null);
+  }
 
   list(): Observable<Project[]> {
     return defer(() => {
@@ -162,7 +170,10 @@ export class LocalProjectRepository extends ProjectRepository {
     return structuredClone({ ...diagram, projectName: project.nome, projectDescription: project.descricao ?? '' });
   }
 
-  /** Lê o banco; na primeira visita (ou com dados corrompidos) cria os exemplos. */
+  /**
+   * Lê o banco. Na primeira visita cria os exemplos. Dados ilegíveis (JSON inválido ou outra `version`) não são
+   * descartados em silêncio: uma cópia vai para outra chave e o usuário é avisado antes de recomeçar com os exemplos.
+   */
   private read(): DemoDatabase {
     const raw = this.storage.getItem(DEMO_STORAGE_KEY);
     if (raw) {
@@ -172,12 +183,39 @@ export class LocalProjectRepository extends ProjectRepository {
           return parsed;
         }
       } catch {
-        // dados corrompidos: recomeça com os exemplos
+        // cai no tratamento de dados ilegíveis abaixo
       }
+      this.preserveUnreadable(raw);
     }
     const seeded = createDemoDatabase();
-    this.write(seeded);
+    try {
+      this.write(seeded);
+    } catch {
+      // Sem espaço/permissão para gravar: segue com os exemplos só em memória, sem quebrar a tela.
+      this.notice.set(
+        'Não foi possível salvar dados neste navegador (armazenamento cheio ou bloqueado). As alterações não serão mantidas.'
+      );
+    }
     return seeded;
+  }
+
+  private preserveUnreadable(raw: string): void {
+    if (this.preservedRaw === raw) {
+      return; // já preservado nesta sessão (a gravação dos exemplos pode ter falhado)
+    }
+    this.preservedRaw = raw;
+    const backupKey = `${DEMO_STORAGE_KEY}_unreadable_${Date.now()}`;
+    let preserved = true;
+    try {
+      this.storage.setItem(backupKey, raw);
+    } catch {
+      preserved = false;
+    }
+    this.notice.set(
+      preserved
+        ? `Os dados salvos neste navegador não puderam ser lidos. Uma cópia foi preservada em "${backupKey}" e os exemplos foram restaurados.`
+        : 'Os dados salvos neste navegador não puderam ser lidos e não foi possível preservar uma cópia. Os exemplos foram restaurados.'
+    );
   }
 
   private write(db: DemoDatabase): void {

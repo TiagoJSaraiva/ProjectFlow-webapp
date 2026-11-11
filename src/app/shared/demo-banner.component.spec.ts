@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { LocalProjectRepository } from '../data/local-project-repository';
@@ -6,10 +7,16 @@ import { DemoBannerComponent } from './demo-banner.component';
 import { UnsavedChangesBypass } from './navigation-bypass';
 
 describe('DemoBannerComponent', () => {
-  const repoStub = { restoreSamples: jasmine.createSpy('restoreSamples') };
+  const notice = signal<string | null>(null);
+  const repoStub = {
+    restoreSamples: jasmine.createSpy('restoreSamples'),
+    recoveryNotice: notice.asReadonly(),
+    dismissRecoveryNotice: () => notice.set(null)
+  };
 
   function create(demo: boolean) {
     repoStub.restoreSamples.calls.reset();
+    notice.set(null);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -58,5 +65,17 @@ describe('DemoBannerComponent', () => {
     expect(repoStub.restoreSamples).toHaveBeenCalledTimes(1);
     // a confirmação da restauração já basta: o guard do board não deve pedir outra
     expect(TestBed.inject(UnsavedChangesBypass).active).toBeTrue();
+  });
+
+  it('mostra o aviso de recuperação de dados e permite dispensá-lo', () => {
+    const fixture = create(true);
+    notice.set('Os dados salvos neste navegador não puderam ser lidos.');
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('não puderam ser lidos');
+    const dismiss = [...root.querySelectorAll('button')].find((b) => b.textContent?.includes('Entendi'))!;
+    dismiss.click();
+    fixture.detectChanges();
+    expect(root.textContent).not.toContain('não puderam ser lidos');
   });
 });

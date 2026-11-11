@@ -17,6 +17,12 @@ import { DialogAction, DialogComponent } from './dialog.component';
         <span>Modo demonstração — os dados ficam salvos neste navegador.</span>
         <button type="button" (click)="confirmOpen.set(true)">Restaurar exemplos</button>
       </div>
+      @if (repository.recoveryNotice(); as notice) {
+        <div class="demo-banner" role="status">
+          <span>{{ notice }}</span>
+          <button type="button" (click)="repository.dismissRecoveryNotice()">Entendi</button>
+        </div>
+      }
       @if (confirmOpen()) {
         <app-dialog
           title="Restaurar exemplos?"
@@ -67,7 +73,7 @@ export class DemoBannerComponent {
     { value: 'restore', label: 'Restaurar', kind: 'danger' },
     { value: 'cancel', label: 'Cancelar', kind: 'secondary' }
   ];
-  private readonly repository = inject(LocalProjectRepository);
+  protected readonly repository = inject(LocalProjectRepository);
   private readonly router = inject(Router);
   private readonly bypass = inject(UnsavedChangesBypass);
 
