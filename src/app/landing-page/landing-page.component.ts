@@ -5,6 +5,8 @@ import { Project } from '../projects/project.model';
 import { ProjectRepository } from '../data/project-repository';
 import { getApiErrorMessage } from '../shared/api-error';
 
+const HIGHEST_PROJECT_NUMBER_KEY = 'projectflow_highest_project_number';
+
 type DateInput = string | number | number[] | Date | LocalDateTimeLike | null | undefined;
 
 interface LocalDateTimeLike {
@@ -128,16 +130,31 @@ export class LandingPageComponent implements OnInit, OnDestroy {
     return project.id;
   }
 
+  /** Próximo "Projeto N": nunca repete um número já usado, mesmo depois de exclusões (guarda o maior número visto). */
   private computeNextProjectNumber(projects: Project[]): number {
     const numbers = projects
       .map((project) => this.extractProjectNumber(project.nome))
       .filter((value): value is number => Number.isFinite(value));
+    const highest = Math.max(0, this.readHighestProjectNumber(), ...numbers);
+    this.storeHighestProjectNumber(highest);
+    return highest + 1;
+  }
 
-    if (!numbers.length) {
-      return projects.length + 1;
+  private readHighestProjectNumber(): number {
+    try {
+      const value = Number(localStorage.getItem(HIGHEST_PROJECT_NUMBER_KEY));
+      return Number.isFinite(value) ? value : 0;
+    } catch {
+      return 0;
     }
+  }
 
-    return Math.max(...numbers) + 1;
+  private storeHighestProjectNumber(value: number): void {
+    try {
+      localStorage.setItem(HIGHEST_PROJECT_NUMBER_KEY, String(value));
+    } catch {
+      // armazenamento indisponível: cai de volta para o maior número da lista
+    }
   }
 
   private normalizeProject(project: Project | null | undefined, fallbackName: string): Project {

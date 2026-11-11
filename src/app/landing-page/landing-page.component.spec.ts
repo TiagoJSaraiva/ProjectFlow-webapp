@@ -31,6 +31,7 @@ describe('LandingPageComponent', () => {
   }
 
   beforeEach(() => {
+    localStorage.removeItem('projectflow_highest_project_number');
     repo.list.calls.reset();
     repo.create.calls.reset();
   });
@@ -79,5 +80,14 @@ describe('LandingPageComponent', () => {
     fixture.detectChanges();
     expect(repo.create).toHaveBeenCalledWith('Projeto 1');
     expect(fixture.nativeElement.querySelector('.success').textContent).toContain('Projeto 1');
+  });
+
+  it('não repete "Projeto N" depois de excluir o maior número', () => {
+    repo.list.and.returnValues(of([project('1', 'Projeto 1'), project('2', 'Projeto 2')]), of([project('1', 'Projeto 1')]), of([project('1', 'Projeto 1')]));
+    repo.create.and.returnValue(of(project('3', 'Projeto 3')));
+    const fixture = create(); // viu "Projeto 2"
+    fixture.componentInstance.loadProjects(); // o Projeto 2 foi excluído
+    fixture.componentInstance.createProject();
+    expect(repo.create).toHaveBeenCalledWith('Projeto 3');
   });
 });

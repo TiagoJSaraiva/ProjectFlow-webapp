@@ -8,4 +8,6 @@ import { Component, ChangeDetectionStrategy } from '@angular/core';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './footer.component.css'
 })
-export class FooterComponent {}
+export class FooterComponent {
+  readonly year = new Date().getFullYear();
+}
