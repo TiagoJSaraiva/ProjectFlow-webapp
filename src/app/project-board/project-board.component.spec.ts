@@ -284,6 +284,19 @@ describe('ProjectBoardComponent', () => {
       expect(state().selectedNodeId).toBe('a');
     });
 
+    it('a mensagem de salvo some quando há nova alteração ou desfazer, voltando a indicar "não salvo"', () => {
+      repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
+      create();
+      key(']');
+      key('ArrowRight');
+      component.onSave();
+      expect(state().statusMessage).toBe('Diagrama salvo com sucesso.');
+      key('z', { ctrlKey: true });
+      fixture.detectChanges();
+      expect(state().statusMessage).toBeNull();
+      expect(root().querySelector('.status')!.textContent).toContain('Alterações não salvas');
+    });
+
     it('falha: mostra a mensagem da API e continua sujo', () => {
       repo.saveDiagram.and.returnValue(throwError(() => new HttpErrorResponse({ status: 422, error: { message: 'Nome do nó acima de 35.' } })));
       create();

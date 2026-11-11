@@ -18,6 +18,8 @@ export function truncateNodeName(value: string): string {
 	return (value ?? '').slice(0, NODE_NAME_MAX_LENGTH);
 }
 
+export const SAVED_MESSAGE = 'Diagrama salvo com sucesso.';
+
 function initialState(): ProjectBoardState {
 	return {
 		projectId: '',
@@ -69,6 +71,7 @@ export class DiagramStore {
 
 	/** Guarda o diagrama atual no histórico (chame ANTES de alterá-lo). */
 	private record(key: string | null = null): void {
+		this.clearSavedMessage();
 		const { nodes, connections } = this.state();
 		this.history.record({ nodes, connections }, key);
 		this.historyVersion.update((v) => v + 1);
@@ -92,10 +95,18 @@ export class DiagramStore {
 		return { nodes, connections };
 	}
 
+	/** A mensagem "salvo" deixa de valer assim que o diagrama muda de novo. */
+	private clearSavedMessage(): void {
+		if (this.state().statusMessage === SAVED_MESSAGE) {
+			this.patch({ statusMessage: null });
+		}
+	}
+
 	private restore(snapshot: DiagramSnapshot | null): void {
 		if (!snapshot) {
 			return;
 		}
+		this.clearSavedMessage();
 		this.historyVersion.update((v) => v + 1);
 		this.state.update((current) => ({
 			...current,
@@ -177,7 +188,7 @@ export class DiagramStore {
 			isDirty: !unchanged,
 			// mostra o nome já normalizado (sem espaços nas pontas) quando o usuário não o alterou desde o envio
 			projectName: current.projectName.trim() === payload.project.name ? payload.project.name : current.projectName,
-			statusMessage: unchanged ? 'Diagrama salvo com sucesso.' : null
+			statusMessage: unchanged ? SAVED_MESSAGE : null
 		});
 		return unchanged;
 	}
