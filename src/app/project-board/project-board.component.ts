@@ -369,8 +369,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 						onError?.();
 						return;
 					}
-					this.store.hydrate(response, true, 'Diagrama salvo com sucesso.');
-					afterSave?.();
+					if (this.store.markSaved(payload)) {
+						afterSave?.();
+					} else {
+						onError?.(); // houve edições durante o salvamento: continuam pendentes
+					}
 				},
 				error: (error: unknown) => {
 					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível salvar o projeto. Tente novamente.'), true, { isSaving: false });

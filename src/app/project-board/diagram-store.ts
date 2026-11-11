@@ -159,6 +159,23 @@ export class DiagramStore {
 		};
 	}
 
+	/**
+	 * Registra um salvamento confirmado. Só o conteúdo efetivamente enviado vira "limpo": se houve edição
+	 * durante o salvamento, o projeto continua sujo. Histórico e seleção são preservados.
+	 * Devolve `true` quando não restou nenhuma alteração pendente.
+	 */
+	markSaved(payload: SaveProjectDiagramPayload): boolean {
+		const current = this.state();
+		const unchanged =
+			current.nodes === payload.nodes &&
+			current.connections === payload.connections &&
+			current.projectName === payload.project.name &&
+			current.projectDescription === payload.project.description;
+		this.statusError.set(false);
+		this.patch({ isSaving: false, isDirty: !unchanged, statusMessage: unchanged ? 'Diagrama salvo com sucesso.' : null });
+		return unchanged;
+	}
+
 	findInvalidNodeName(): DiagramNode | undefined {
 		return this.state().nodes.find((node) => (node.name ?? '').length > NODE_NAME_MAX_LENGTH);
 	}

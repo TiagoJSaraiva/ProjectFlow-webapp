@@ -100,8 +100,58 @@ describe('ProjectBoardComponent', () => {
     });
   });
 
-  // helpers usados pelos demais blocos (definidos nos commits seguintes)
-  void Subject;
-  void echo;
-  void root;
+  describe('salvar', () => {
+    it('sucesso: fica limpo, mantém o histórico (desfazer) e a seleção', () => {
+      repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
+      create();
+      key(']');
+      key('ArrowRight');
+      expect(component.canUndo()).toBeTrue();
+
+      component.onSave();
+
+      expect(repo.saveDiagram).toHaveBeenCalledTimes(1);
+      expect(state().isDirty).toBeFalse();
+      expect(state().statusMessage).toBe('Diagrama salvo com sucesso.');
+      expect(component.canUndo()).toBeTrue();
+      expect(state().selectedNodeId).toBe('a');
+    });
+
+    it('falha: mostra a mensagem da API e continua sujo', () => {
+      repo.saveDiagram.and.returnValue(throwError(() => new HttpErrorResponse({ status: 422, error: { message: 'Nome do nó acima de 35.' } })));
+      create();
+      key(']');
+      key('ArrowRight');
+      component.onSave();
+      expect(state().isDirty).toBeTrue();
+      expect(state().isSaving).toBeFalse();
+      expect(state().statusMessage).toBe('Nome do nó acima de 35.');
+      fixture.detectChanges();
+      expect(root().querySelector('.status.error')).not.toBeNull();
+    });
+
+    it('edição feita durante o salvamento não é perdida nem dada como salva', () => {
+      const pending = new Subject<ProjectDiagramResponse>();
+      let sent!: SaveProjectDiagramPayload;
+      repo.saveDiagram.and.callFake((_id: string, payload: SaveProjectDiagramPayload) => {
+        sent = payload;
+        return pending;
+      });
+      create();
+      key(']');
+      key('ArrowRight');
+      component.onSave();
+      expect(state().isSaving).toBeTrue();
+
+      key('ArrowDown'); // edita enquanto o servidor ainda não respondeu
+      const editedNodes = state().nodes;
+      pending.next(echo('p1', sent));
+      pending.complete();
+
+      expect(state().isSaving).toBeFalse();
+      expect(state().isDirty).toBeTrue();
+      expect(state().nodes).toBe(editedNodes);
+      expect(state().nodes[0].y).toBe(10);
+    });
+  });
 });
