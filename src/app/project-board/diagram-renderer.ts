@@ -1,8 +1,14 @@
 import Konva from 'konva';
-import { computeBendPoint } from './connection-geometry';
-import { DEFAULT_RADIUS, DEFAULT_RECT } from './diagram-constants';
+import { connectionPath } from './connection-geometry';
+import { DEFAULT_RADIUS, DEFAULT_RECT, clampNodeSize } from './diagram-constants';
 import { DiagramConnection, DiagramNode, DiagramViewport } from './project-board.model';
 import { zoomViewportAt } from './viewport-math';
+
+export interface NodeSize {
+	width?: number;
+	height?: number;
+	radius?: number;
+}
 
 /** Eventos que o renderizador devolve ao dono do estado. */
 export interface RendererEvents {
@@ -10,6 +16,9 @@ export interface RendererEvents {
 	nodeClick(nodeId: string): void;
 	nodeDragMove(nodeId: string, x: number, y: number): void;
 	nodeDragEnd(nodeId: string, x: number, y: number): void;
+	/** Redimensionamento em andamento (apenas pré-visualização). */
+	nodeResize(nodeId: string, size: NodeSize): void;
+	nodeResizeEnd(nodeId: string, size: NodeSize): void;
 	backgroundClick(): void;
 	/** Pan/zoom em andamento (atualiza o viewport). */
 	viewportChange(viewport: DiagramViewport): void;
@@ -90,6 +99,7 @@ export class DiagramRenderer {
 			group.position({ x: viewport.offsetX, y: viewport.offsetY });
 			group.scale({ x: viewport.zoom, y: viewport.zoom });
 		});
+		this.scaleHandles(viewport.zoom);
 		this.drawGrid(viewport.gridSize);
 	}
 
@@ -133,8 +143,12 @@ export class DiagramRenderer {
 					listening: false
 				})
 			);
+			if (selectedId === node.id) {
+				group.add(this.createResizeHandle(node));
+			}
 			this.nodeGroup.add(group);
 		}
+		this.scaleHandles(this.events.getViewport().zoom);
 		this.nodeLayer.batchDraw();
 	}
 
@@ -147,12 +161,83 @@ export class DiagramRenderer {
 			if (!from || !to) {
 				continue;
 			}
-			const bend = computeBendPoint(from, to);
+			const path = connectionPath(from, to);
+			if (!path) {
+				continue;
+			}
 			this.connectionGroup.add(
-				new Konva.Line({ points: [from.x, from.y, bend.x, bend.y, to.x, to.y], stroke: '#f7d046', strokeWidth: 3, lineCap: 'round', lineJoin: 'round' })
+				new Konva.Arrow({
+					points: path.flatMap((point) => [point.x, point.y]),
+					stroke: '#f7d046',
+					fill: '#f7d046',
+					strokeWidth: 3,
+					pointerLength: 14,
+					pointerWidth: 14,
+					lineCap: 'round',
+					lineJoin: 'round'
+				})
 			);
 		}
 		this.connectionLayer.batchDraw();
+	}
+
+	/** Mantém as alças com tamanho constante na tela, independente do zoom. */
+	private scaleHandles(zoom: number): void {
+		for (const handle of this.nodeGroup.find('.resize-handle')) {
+			handle.scale({ x: 1 / zoom, y: 1 / zoom });
+		}
+	}
+
+	private createResizeHandle(node: DiagramNode): Konva.Rect {
+		const isRect = node.type === 'RECTANGLE';
+		const handle = new Konva.Rect({
+			name: 'resize-handle',
+			width: 18,
+			height: 18,
+			offsetX: 9,
+			offsetY: 9,
+			cornerRadius: 4,
+			fill: '#f7d046',
+			stroke: '#050505',
+			strokeWidth: 1,
+			x: isRect ? (node.width ?? DEFAULT_RECT.width) / 2 : (node.radius ?? DEFAULT_RADIUS),
+			y: isRect ? (node.height ?? DEFAULT_RECT.height) / 2 : 0,
+			draggable: true
+		});
+		// Evita que o clique/arrasto da alça também arraste ou selecione o nó.
+		handle.on('mousedown touchstart click tap', (evt) => (evt.cancelBubble = true));
+		handle.on('mouseenter', () => (this.container.style.cursor = 'nwse-resize'));
+		handle.on('mouseleave', () => (this.container.style.cursor = ''));
+		handle.on('dragmove', () => {
+			const size = this.sizeFromHandle(node, handle);
+			this.applySizePreview(handle.getParent() as Konva.Group, node, size);
+			this.events.nodeResize(node.id, size);
+		});
+		handle.on('dragend', () => this.events.nodeResizeEnd(node.id, this.sizeFromHandle(node, handle)));
+		return handle;
+	}
+
+	private sizeFromHandle(node: DiagramNode, handle: Konva.Rect): NodeSize {
+		if (node.type === 'RECTANGLE') {
+			return { width: clampNodeSize('width', handle.x() * 2), height: clampNodeSize('height', handle.y() * 2) };
+		}
+		return { radius: clampNodeSize('radius', handle.x()) };
+	}
+
+	/** Atualiza as formas do nó durante o arrasto da alça, sem passar pelo estado. */
+	private applySizePreview(group: Konva.Group, node: DiagramNode, size: NodeSize): void {
+		const handle = group.findOne('.resize-handle') as Konva.Rect;
+		const shape = group.getChildren()[0];
+		const label = group.findOne('Text') as Konva.Text;
+		if (node.type === 'RECTANGLE' && size.width && size.height) {
+			(shape as Konva.Rect).setAttrs({ width: size.width, height: size.height, offsetX: size.width / 2, offsetY: size.height / 2 });
+			label.setAttrs({ width: size.width, height: size.height, offsetX: size.width / 2, offsetY: size.height / 2 });
+			handle.position({ x: size.width / 2, y: size.height / 2 });
+		} else if (node.type === 'CIRCLE' && size.radius) {
+			(shape as Konva.Circle).radius(size.radius);
+			label.setAttrs({ width: size.radius * 2, height: size.radius * 2, offsetX: size.radius, offsetY: size.radius });
+			handle.position({ x: size.radius, y: 0 });
+		}
 	}
 
 	private isBackground(target: Konva.Node): boolean {

@@ -124,6 +124,8 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			nodeClick: (id) => this.onNodeClick(id),
 			nodeDragMove: (id, x, y) => this.previewConnectionsWhileDragging(id, x, y),
 			nodeDragEnd: (id, x, y) => this.store.moveNode(id, x, y),
+			nodeResize: (id, size) => this.previewResize(id, size),
+			nodeResizeEnd: (id, size) => this.store.resizeNode(id, size),
 			backgroundClick: () => this.store.clearSelection(),
 			viewportChange: (viewport) => this.store.setViewport(viewport),
 			viewportCommit: () => this.store.markDirty()
@@ -629,6 +631,12 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	/** Redesenha as conexões do nó enquanto ele é arrastado, sem alterar o estado. */
 	private previewConnectionsWhileDragging(nodeId: string, x: number, y: number): void {
 		const nodes = this.store.nodes().map((node) => (node.id === nodeId ? { ...node, x, y } : node));
+		this.renderer?.renderConnections(nodes, this.store.connections());
+	}
+
+	/** Redesenha as conexões com o tamanho provisório do nó durante o redimensionamento. */
+	private previewResize(nodeId: string, size: { width?: number; height?: number; radius?: number }): void {
+		const nodes = this.store.nodes().map((node) => (node.id === nodeId ? { ...node, ...size } : node));
 		this.renderer?.renderConnections(nodes, this.store.connections());
 	}
 

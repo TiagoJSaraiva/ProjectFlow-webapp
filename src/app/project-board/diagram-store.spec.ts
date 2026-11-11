@@ -174,4 +174,25 @@ describe('DiagramStore', () => {
       expect(store.state().selectedNodeId).toBe('b');
     });
   });
+
+  describe('redimensionar', () => {
+    it('redimensiona retângulo e círculo respeitando os limites e permite desfazer', () => {
+      store.resizeNode('a', { width: 400, height: 10 });
+      expect(store.nodes()[0].width).toBe(400);
+      expect(store.nodes()[0].height).toBe(50); // mínimo
+      store.resizeNode('b', { radius: 9999 });
+      expect(store.nodes()[1].radius).toBe(300); // máximo
+      store.undo();
+      store.undo();
+      expect(store.nodes()[0].width).toBeUndefined();
+    });
+
+    it('campos numéricos da barra lateral são limitados e ignoram valores inválidos', () => {
+      store.selectNode('a');
+      store.updateSelectedNodeField('width', 5000);
+      expect(store.nodes()[0].width).toBe(600);
+      store.updateSelectedNodeField('width', NaN);
+      expect(store.nodes()[0].width).toBe(600);
+    });
+  });
 });

@@ -98,6 +98,23 @@
             <span>Descrição</span>
             <textarea rows="4" maxlength="500" [ngModel]="node.description" (ngModelChange)="updateNodeField('description', $event)"></textarea>
           </label>
+          <div class="size-fields">
+            @if (node.type === 'RECTANGLE') {
+              <label>
+                <span>Largura</span>
+                <input type="number" min="80" max="600" step="10" [ngModel]="node.width ?? 200" (ngModelChange)="updateNodeField('width', $event)" />
+              </label>
+              <label>
+                <span>Altura</span>
+                <input type="number" min="50" max="400" step="10" [ngModel]="node.height ?? 120" (ngModelChange)="updateNodeField('height', $event)" />
+              </label>
+            } @else {
+              <label>
+                <span>Raio</span>
+                <input type="number" min="32" max="300" step="5" [ngModel]="node.radius ?? 64" (ngModelChange)="updateNodeField('radius', $event)" />
+              </label>
+            }
+          </div>
           <div class="actions">
             <button type="button" class="secondary" (click)="startLinkWorkflow(node.id)">Criar conexão</button>
             <button type="button" class="ghost" (click)="deleteNode(node.id)">Remover</button>

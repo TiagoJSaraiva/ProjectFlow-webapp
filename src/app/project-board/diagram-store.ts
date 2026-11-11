@@ -2,7 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { generateId } from '../shared/ids';
 import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
 import { History } from './diagram-history';
-import { DEFAULT_RADIUS, DEFAULT_RECT, DEFAULT_VIEWPORT, NODE_NAME_MAX_LENGTH } from './diagram-constants';
+import { DEFAULT_RADIUS, DEFAULT_RECT, DEFAULT_VIEWPORT, NODE_NAME_MAX_LENGTH, clampNodeSize } from './diagram-constants';
 import {
 	DiagramConnection,
 	DiagramNode,
@@ -224,11 +224,38 @@ export class DiagramStore {
 		if (!selected) {
 			return;
 		}
-		const normalized = typeof value === 'number' ? value : field === 'name' ? truncateNodeName(value) : value;
+		let normalized: string | number = typeof value === 'number' ? value : field === 'name' ? truncateNodeName(value) : value;
+		if (field === 'width' || field === 'height' || field === 'radius') {
+			if (typeof normalized !== 'number' || !Number.isFinite(normalized)) {
+				return;
+			}
+			normalized = clampNodeSize(field, normalized);
+		}
 		this.record(`field:${selected}:${field}`);
 		this.state.update((current) => ({
 			...current,
 			nodes: current.nodes.map((node) => (node.id === selected ? ({ ...node, [field]: normalized } as DiagramNode) : node)),
+			isDirty: true
+		}));
+	}
+
+	/** Redimensiona o nó (largura/altura do retângulo ou raio do círculo), respeitando os limites. */
+	resizeNode(nodeId: string, size: { width?: number; height?: number; radius?: number }): void {
+		this.record();
+		this.state.update((current) => ({
+			...current,
+			nodes: current.nodes.map((node) => {
+				if (node.id !== nodeId) {
+					return node;
+				}
+				return node.type === 'RECTANGLE'
+					? {
+							...node,
+							width: clampNodeSize('width', size.width ?? node.width ?? DEFAULT_RECT.width),
+							height: clampNodeSize('height', size.height ?? node.height ?? DEFAULT_RECT.height)
+						}
+					: { ...node, radius: clampNodeSize('radius', size.radius ?? node.radius ?? DEFAULT_RADIUS) };
+			}),
 			isDirty: true
 		}));
 	}
