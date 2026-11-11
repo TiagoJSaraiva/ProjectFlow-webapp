@@ -52,4 +52,50 @@ describe('DiagramRenderer', () => {
       renderer.renderConnections(nodes, [{ id: 'c', fromNodeId: 'a', toNodeId: 'b' }]);
     }).not.toThrow();
   });
+
+  describe('redimensionamento por alça', () => {
+    function handleOf(): any {
+      return (renderer as any).nodeGroup.findOne('.resize-handle');
+    }
+
+    it('arrastar a alça redimensiona e NÃO conta como mover o nó', () => {
+      const spies = {
+        ...events,
+        nodeDragEnd: jasmine.createSpy('nodeDragEnd'),
+        nodeDragMove: jasmine.createSpy('nodeDragMove'),
+        nodeResize: jasmine.createSpy('nodeResize'),
+        nodeResizeEnd: jasmine.createSpy('nodeResizeEnd')
+      };
+      renderer.destroy();
+      renderer = new DiagramRenderer(container, spies);
+      renderer.renderNodes(nodes, 'a');
+
+      const handle = handleOf();
+      handle.position({ x: 150, y: 90 });
+      handle.fire('dragmove', {}, true);
+      handle.fire('dragend', {}, true);
+
+      expect(spies.nodeResize).toHaveBeenCalledWith('a', { width: 300, height: 180 });
+      expect(spies.nodeResizeEnd).toHaveBeenCalledWith('a', { width: 300, height: 180 });
+      expect(spies.nodeDragMove).not.toHaveBeenCalled();
+      expect(spies.nodeDragEnd).not.toHaveBeenCalled();
+    });
+
+    it('respeita os tamanhos mínimos ao encolher', () => {
+      const resize = jasmine.createSpy('nodeResizeEnd');
+      renderer.destroy();
+      renderer = new DiagramRenderer(container, { ...events, nodeResizeEnd: resize });
+      renderer.renderNodes(nodes, 'a');
+      const handle = handleOf();
+      handle.position({ x: 5, y: 5 });
+      handle.fire('dragend', {}, true);
+      expect(resize).toHaveBeenCalledWith('a', { width: 80, height: 50 });
+
+      renderer.renderNodes(nodes, 'b');
+      const circleHandle = handleOf();
+      circleHandle.position({ x: 3, y: 0 });
+      circleHandle.fire('dragend', {}, true);
+      expect(resize).toHaveBeenCalledWith('b', { radius: 32 });
+    });
+  });
 });

@@ -175,8 +175,9 @@ export class DiagramRenderer {
 		this.nodeGroup.destroyChildren();
 		for (const node of nodes) {
 			const group = new Konva.Group({ x: node.x, y: node.y, draggable: true, listening: true, id: node.id });
-			group.on('dragmove', () => this.events.nodeDragMove(node.id, group.x(), group.y()));
-			group.on('dragend', () => this.events.nodeDragEnd(node.id, group.x(), group.y()));
+			// Eventos de arrasto da alça de redimensionamento sobem até o grupo: só o arrasto do próprio nó conta.
+			group.on('dragmove', (evt) => evt.target === group && this.events.nodeDragMove(node.id, group.x(), group.y()));
+			group.on('dragend', (evt) => evt.target === group && this.events.nodeDragEnd(node.id, group.x(), group.y()));
 			group.on('click tap', (evt) => {
 				evt.cancelBubble = true;
 				this.events.nodeClick(node.id);
