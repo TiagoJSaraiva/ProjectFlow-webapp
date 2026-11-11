@@ -194,11 +194,11 @@ The backend is a separate Spring Boot application:
 
 ## Tests
 
-Karma + Jasmine, about 120 unit and component tests. They cover the repositories (HTTP with `HttpTestingController`,
+Karma + Jasmine, about 150 unit and component tests. They cover the repositories (HTTP with `HttpTestingController`,
 local with an in-memory storage, and a test proving that demonstration mode makes **no HTTP calls**), authentication
 (service, guard, interceptor), error messages, the board store and undo/redo history, geometry, viewport math, JSON
 export/import validation, the Konva renderer (PNG export and resize handle) and the dialog, banner, landing page and route
-configuration.
+configuration, plus component tests of the board (save success/failure/edit during save, delete, unsaved-changes guard and keyboard shortcuts).
 
 ```bash
 npm run test:ci          # single headless run
@@ -230,7 +230,11 @@ test and build. In the repository settings, Pages must use **GitHub Actions** as
   (rectangle 80-600 x 50-400, circle radius 32-300).
 - Dates from the API are ISO-8601 strings without a time zone and are interpreted as UTC (the server generates them in
   UTC); the old array format is still tolerated.
-- Pan and zoom count as changes to the project (they are saved with the diagram).
+- Pan and zoom do not mark the project as changed; the current view is stored the next time you save other changes.
+- The project name is trimmed (leading/trailing spaces) before saving and cannot be empty. A connection between the same two nodes in the same direction cannot be created twice, and new nodes added from the palette buttons are placed in a cascade so they do not overlap.
+- Saving keeps your undo history and selection; edits made while a save is in flight stay pending (the project remains "unsaved"). Deleting a project does not ask about unsaved changes afterwards. "Restaurar exemplos" already asks for confirmation, so it does not show a second unsaved-changes dialog.
+- If the saved demo data cannot be read (corrupted or from another version), a copy is kept under another `localStorage` key (`projectflow_demo_v1_unreadable_<timestamp>`), the examples are restored and a discreet notice is shown. If storage is full or blocked, the examples are kept in memory only and a notice explains that changes will not persist.
+- New projects are named "Projeto N" and the number is never reused after deletions (the highest number seen is remembered in `localStorage`).
 - Deleting a node or a connection does not ask for confirmation because it can be undone; deleting a project does ask.
 - The Karma builder (`@angular-devkit/build-angular:karma`) is deprecated by Angular; it still works and was kept to
   avoid a test-runner migration.

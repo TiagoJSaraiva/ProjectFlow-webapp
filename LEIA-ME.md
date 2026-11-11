@@ -192,12 +192,12 @@ O backend é uma aplicação Spring Boot separada: <https://github.com/TiagoJSar
 
 ## Testes
 
-Karma + Jasmine, cerca de 120 testes unitários e de componentes. Cobrem os repositórios (HTTP com
+Karma + Jasmine, cerca de 150 testes unitários e de componentes. Cobrem os repositórios (HTTP com
 `HttpTestingController`, local com armazenamento em memória e um teste que prova que o modo demonstração **não faz
 chamadas HTTP**), a autenticação (service, guard, interceptor), as mensagens de erro, o store do board e o histórico de
 desfazer/refazer, a geometria, a matemática do viewport, a validação da exportação/importação JSON, o renderizador Konva
 (exportação PNG e alça de redimensionamento) e o diálogo, o aviso da demo, a lista de projetos e a configuração das
-rotas.
+rotas, além de testes de componente do board (salvar com sucesso/falha/edição durante o salvamento, apagar, guard de alterações não salvas e atalhos de teclado).
 
 ```bash
 npm run test:ci          # execução única headless
@@ -230,7 +230,11 @@ fazem o build. Nas configurações do repositório, o Pages deve usar **GitHub A
   tamanhos são limitados (retângulo 80-600 x 50-400, raio do círculo 32-300).
 - As datas da API são strings ISO-8601 sem fuso e são interpretadas como UTC (o servidor as gera em UTC); o formato
   antigo em array ainda é tolerado.
-- Pan e zoom contam como alteração do projeto (são salvos junto com o diagrama).
+- Pan e zoom não marcam o projeto como alterado; a visão atual é gravada na próxima vez que você salvar outras alterações.
+- O nome do projeto é enviado sem espaços nas pontas e não pode ficar vazio. Não é possível criar duas conexões entre os mesmos dois nós na mesma direção, e os nós adicionados pelos botões da paleta são posicionados em cascata para não se sobrepor.
+- Salvar preserva o histórico de desfazer e a seleção; edições feitas durante um salvamento continuam pendentes (o projeto segue como "não salvo"). Apagar um projeto não pergunta depois sobre alterações não salvas. "Restaurar exemplos" já pede confirmação, então não abre um segundo diálogo de alterações não salvas.
+- Se os dados salvos da demo não puderem ser lidos (corrompidos ou de outra versão), uma cópia é mantida em outra chave do `localStorage` (`projectflow_demo_v1_unreadable_<timestamp>`), os exemplos são restaurados e um aviso discreto aparece. Se o armazenamento estiver cheio ou bloqueado, os exemplos ficam só em memória e um aviso explica que as alterações não serão mantidas.
+- Projetos novos se chamam "Projeto N" e o número nunca é reutilizado após exclusões (o maior número visto fica guardado no `localStorage`).
 - Excluir um nó ou uma conexão não pede confirmação porque pode ser desfeito; excluir um projeto pede.
 - O builder do Karma (`@angular-devkit/build-angular:karma`) está deprecado pelo Angular; continua funcionando e foi
   mantido para evitar a migração do executor de testes.
