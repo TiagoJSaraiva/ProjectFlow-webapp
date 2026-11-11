@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { ProjectRepository } from '../data/project-repository';
+import { UnsavedChangesBypass } from '../shared/navigation-bypass';
 import { ProjectBoardComponent } from './project-board.component';
 import { ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
 
@@ -97,6 +98,20 @@ describe('ProjectBoardComponent', () => {
       expect(state().isDirty).toBeTrue();
       expect(state().statusMessage).toBe('Projeto não encontrado.');
       expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restaurar exemplos com alterações pendentes', () => {
+    it('com a restauração confirmada, o guard de saída não empilha outro diálogo', async () => {
+      create();
+      key(']');
+      key('ArrowRight');
+      expect(state().isDirty).toBeTrue();
+
+      TestBed.inject(UnsavedChangesBypass).active = true; // definido pelo aviso da demo após a confirmação
+
+      expect(await component.requestUnsavedExitPermission()).toBeTrue();
+      expect(component.unsavedDialogOpen()).toBeFalse();
     });
   });
 

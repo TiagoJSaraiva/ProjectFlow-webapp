@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { Router } from '@angular/router';
 import { LocalProjectRepository } from '../data/local-project-repository';
 import { DEMO_MODE } from './api-config';
+import { UnsavedChangesBypass } from './navigation-bypass';
 import { DialogAction, DialogComponent } from './dialog.component';
 
 /** Aviso permanente do modo demonstração, com a ação "Restaurar exemplos". */
@@ -68,12 +69,15 @@ export class DemoBannerComponent {
   ];
   private readonly repository = inject(LocalProjectRepository);
   private readonly router = inject(Router);
+  private readonly bypass = inject(UnsavedChangesBypass);
 
   protected onAction(value: string): void {
     this.confirmOpen.set(false);
     if (value !== 'restore') {
       return;
     }
+    // A confirmação acima já cobre eventuais alterações não salvas do board: não pedir de novo.
+    this.bypass.active = true;
     this.repository.restoreSamples();
     void this.router.navigateByUrl('/').then(() => this.reloadPage());
   }

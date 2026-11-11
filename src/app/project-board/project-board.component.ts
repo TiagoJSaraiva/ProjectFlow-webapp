@@ -18,6 +18,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { ProjectRepository } from '../data/project-repository';
 import { getApiErrorMessage } from '../shared/api-error';
+import { UnsavedChangesBypass } from '../shared/navigation-bypass';
 import { DialogAction, DialogComponent } from '../shared/dialog.component';
 import { dataUrlToBlob, downloadBlob } from '../shared/download';
 import { BoardToolbarComponent } from './board-toolbar.component';
@@ -64,6 +65,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	private readonly router = inject(Router);
 	private readonly repository = inject(ProjectRepository);
 	private readonly injector = inject(Injector);
+	private readonly bypass = inject(UnsavedChangesBypass);
 
 	readonly state = this.store.state;
 	readonly selectedNode = this.store.selectedNode;
@@ -456,7 +458,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	requestUnsavedExitPermission(): Promise<boolean> {
-		if (!this.store.state().isDirty) {
+		if (!this.store.state().isDirty || this.bypass.active) {
 			return Promise.resolve(true);
 		}
 		return new Promise<boolean>((resolve) => {
@@ -599,7 +601,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 	@HostListener('window:beforeunload', ['$event'])
 	handleBeforeUnload(event: BeforeUnloadEvent): void {
-		if (!this.store.state().isDirty || this.allowExternalUnload) {
+		if (!this.store.state().isDirty || this.allowExternalUnload || this.bypass.active) {
 			this.unloadIntent = null;
 			return;
 		}
