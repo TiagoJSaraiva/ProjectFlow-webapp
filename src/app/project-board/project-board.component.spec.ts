@@ -139,6 +139,134 @@ describe('ProjectBoardComponent', () => {
     });
   });
 
+  describe('guard de saída com alterações pendentes', () => {
+    function makeDirty() {
+      create();
+      key(']');
+      key('ArrowRight');
+    }
+
+    it('sem alterações deixa sair sem diálogo', async () => {
+      create();
+      expect(await component.requestUnsavedExitPermission()).toBeTrue();
+      expect(component.unsavedDialogOpen()).toBeFalse();
+    });
+
+    it('cancelar mantém o usuário no board', async () => {
+      makeDirty();
+      const result = component.requestUnsavedExitPermission();
+      expect(component.unsavedDialogOpen()).toBeTrue();
+      component.onUnsavedDialogAction('cancel');
+      expect(await result).toBeFalse();
+      expect(component.unsavedDialogOpen()).toBeFalse();
+    });
+
+    it('sair sem salvar libera a saída sem chamar o servidor', async () => {
+      makeDirty();
+      const result = component.requestUnsavedExitPermission();
+      component.onUnsavedDialogAction('discard');
+      expect(await result).toBeTrue();
+      expect(repo.saveDiagram).not.toHaveBeenCalled();
+    });
+
+    it('salvar e sair salva e libera a saída', async () => {
+      repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
+      makeDirty();
+      const result = component.requestUnsavedExitPermission();
+      component.onUnsavedDialogAction('save');
+      expect(await result).toBeTrue();
+      expect(repo.saveDiagram).toHaveBeenCalledTimes(1);
+    });
+
+    it('se salvar falhar, a saída é bloqueada', async () => {
+      repo.saveDiagram.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      makeDirty();
+      const result = component.requestUnsavedExitPermission();
+      component.onUnsavedDialogAction('save');
+      expect(await result).toBeFalse();
+      expect(state().isDirty).toBeTrue();
+    });
+
+    it('goBack com alterações abre o diálogo em vez de navegar', () => {
+      makeDirty();
+      component.goBack();
+      expect(component.unsavedDialogOpen()).toBeTrue();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('atalhos de teclado', () => {
+    it('] seleciona, setas movem, Ctrl+Z desfaz e Ctrl+Y refaz', () => {
+      create();
+      key(']');
+      expect(state().selectedNodeId).toBe('a');
+      key('ArrowRight');
+      key('ArrowRight', { shiftKey: true });
+      expect(state().nodes[0].x).toBe(60);
+      key('z', { ctrlKey: true });
+      expect(state().nodes[0].x).toBe(0);
+      key('y', { ctrlKey: true });
+      expect(state().nodes[0].x).toBe(60);
+      key('z', { ctrlKey: true });
+      key('z', { ctrlKey: true, shiftKey: true });
+      expect(state().nodes[0].x).toBe(60);
+    });
+
+    it('Delete exclui o nó selecionado e Ctrl+Z o traz de volta', () => {
+      create();
+      key(']');
+      key('Delete');
+      expect(state().nodes.map((n) => n.id)).toEqual(['b']);
+      key('z', { ctrlKey: true });
+      expect(state().nodes.length).toBe(2);
+    });
+
+    it('Esc cancela o modo de conexão e depois limpa a seleção', () => {
+      create();
+      key(']');
+      key('c');
+      expect(state().linkSourceId).toBe('a');
+      key('Escape');
+      expect(state().linkSourceId).toBeNull();
+      expect(state().selectedNodeId).toBe('a');
+      key('Escape');
+      expect(state().selectedNodeId).toBeNull();
+    });
+
+    it('conecta com C + ] + Enter', () => {
+      create();
+      key(']'); // a
+      key('c');
+      key(']'); // b
+      key('Enter');
+      expect(state().connections.length).toBe(1);
+      expect(state().connections[0].fromNodeId).toBe('a');
+      expect(state().connections[0].toNodeId).toBe('b');
+    });
+
+    it('Ctrl+S salva só quando há alterações', () => {
+      repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
+      create();
+      key('s', { ctrlKey: true });
+      expect(repo.saveDiagram).not.toHaveBeenCalled();
+      key(']');
+      key('ArrowDown');
+      key('s', { ctrlKey: true });
+      expect(repo.saveDiagram).toHaveBeenCalledTimes(1);
+    });
+
+    it('não captura teclas enquanto o usuário digita em um campo', () => {
+      create();
+      key(']');
+      fixture.detectChanges();
+      const input = root().querySelector('#node-title-input') as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      expect(state().nodes.length).toBe(2);
+      expect(state().nodes[0].x).toBe(0);
+    });
+  });
+
   describe('salvar', () => {
     it('sucesso: fica limpo, mantém o histórico (desfazer) e a seleção', () => {
       repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
