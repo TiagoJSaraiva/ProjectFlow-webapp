@@ -20,7 +20,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
 import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
 import { getApiErrorMessage } from '../shared/api-error';
-import { ProjectSyncService } from '../projects/project-sync.service';
 import { ProjectBoardService } from './project-board.service';
 
 const DEFAULT_RECT = { width: 200, height: 120 };
@@ -75,7 +74,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
 	private readonly injector = inject(Injector);
-	private readonly projectSync = inject(ProjectSyncService);
 	private readonly viewportEffect = effect(
 		() => {
 			const state = this.state();
@@ -408,7 +406,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 						return;
 					}
 					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
-					this.announceProjectSnapshot(response, 'save');
 					afterSave?.();
 				},
 				error: (error: unknown) => {
@@ -562,7 +559,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.subscribe({
 				next: (response) => {
 					this.hydrateState(response, true, null);
-					this.announceProjectSnapshot(response, 'load');
 				},
 				error: (error: unknown) =>
 					this.fail({ isLoading: false, statusMessage: getApiErrorMessage(error, 'Não foi possível carregar o projeto.') })
@@ -590,20 +586,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			isDeleting: false,
 			isLoading: false,
 			statusMessage
-		});
-	}
-
-	private announceProjectSnapshot(response: ProjectDiagramResponse, reason: 'load' | 'save'): void {
-		if (!response?.projectId) {
-			return;
-		}
-		const timestamp = new Date().toISOString();
-		this.projectSync.emit({
-			id: response.projectId,
-			nome: response.projectName ?? undefined,
-			descricao: response.projectDescription ?? undefined,
-			ultimoAcesso: timestamp,
-			ultimaAlteracao: reason === 'save' ? timestamp : undefined
 		});
 	}
 

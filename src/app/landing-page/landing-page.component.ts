@@ -2,7 +2,6 @@ import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { Project } from '../projects/project.model';
-import { ProjectSyncService, ProjectSyncUpdate } from '../projects/project-sync.service';
 import { ProjectService } from '../projects/project.service';
 import { getApiErrorMessage } from '../shared/api-error';
 
@@ -38,12 +37,10 @@ export class LandingPageComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly projectService: ProjectService,
-    private readonly router: Router,
-    private readonly projectSync: ProjectSyncService
+    private readonly router: Router
   ) {}
 
   ngOnInit(): void {
-    this.subscribeToProjectSync();
     this.loadProjects();
   }
 
@@ -67,7 +64,6 @@ export class LandingPageComponent implements OnInit, OnDestroy {
         }));
         this.projects = this.sortProjects(normalized);
         this.projectCounter = this.computeNextProjectNumber(this.projects);
-        this.applyProjectUpdates(this.projectSync.consumePending());
         if (shouldShowSpinner) {
           this.isLoading = false;
         }
@@ -257,53 +253,5 @@ export class LandingPageComponent implements OnInit, OnDestroy {
     const timestamp = Date.UTC(year, month - 1, day, hour, minute, second, millis);
     const parsed = new Date(timestamp);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  private subscribeToProjectSync(): void {
-    this.projectSync
-      .updates()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((update) => {
-        const applied = this.applyProjectUpdates([update]);
-        if (applied) {
-          this.projectSync.markAsProcessed(update.id);
-        }
-      });
-  }
-
-  private applyProjectUpdates(updates: ProjectSyncUpdate[]): boolean {
-    if (!updates.length || !this.projects.length) {
-      return false;
-    }
-
-    const updateMap = new Map(updates.map((update) => [update.id, update]));
-    let mutated = false;
-    const nextProjects = this.projects.map((project) => {
-      const candidate = updateMap.get(project.id);
-      if (!candidate) {
-        return project;
-      }
-      mutated = true;
-      return this.mergeProjectUpdate(project, candidate);
-    });
-
-    if (!mutated) {
-      return false;
-    }
-
-    this.projects = this.sortProjects(nextProjects);
-    return true;
-  }
-
-  private mergeProjectUpdate(project: Project, update: ProjectSyncUpdate): Project {
-    return {
-      ...project,
-      nome: update.nome ?? project.nome,
-      descricao: update.descricao ?? project.descricao,
-      dataCriado: update.dataCriado ?? project.dataCriado,
-      ultimaAlteracao: update.ultimaAlteracao ?? project.ultimaAlteracao,
-      ultimoAcesso: update.ultimoAcesso ?? project.ultimoAcesso,
-      totalTarefas: typeof update.totalTarefas === 'number' ? update.totalTarefas : project.totalTarefas
-    };
   }
 }
