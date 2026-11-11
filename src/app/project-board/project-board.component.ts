@@ -18,9 +18,11 @@ import { Subject, takeUntil } from 'rxjs';
 import { ProjectRepository } from '../data/project-repository';
 import { getApiErrorMessage } from '../shared/api-error';
 import { DialogAction, DialogComponent } from '../shared/dialog.component';
+import { dataUrlToBlob, downloadBlob } from '../shared/download';
 import { BoardToolbarComponent } from './board-toolbar.component';
 import { nodesBounds } from './connection-geometry';
 import { NODE_NAME_MAX_LENGTH } from './diagram-constants';
+import { MAX_IMPORT_BYTES, exportFileBaseName, parseDiagramJson, serializeDiagram } from './diagram-io';
 import { DiagramRenderer } from './diagram-renderer';
 import { DiagramStore } from './diagram-store';
 import { DiagramNode, DiagramNodeType } from './project-board.model';
@@ -284,6 +286,46 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		});
 	}
 
+	// --- Exportar / importar ---------------------------------------------------------------
+
+	exportJson(): void {
+		const state = this.store.state();
+		const json = serializeDiagram({
+			projectName: state.projectName,
+			projectDescription: state.projectDescription,
+			viewport: state.viewport,
+			nodes: state.nodes,
+			connections: state.connections
+		});
+		downloadBlob(`${exportFileBaseName(state.projectName)}.json`, new Blob([json], { type: 'application/json' }));
+		this.store.flash('Diagrama exportado em JSON.');
+	}
+
+	exportPng(): void {
+		const state = this.store.state();
+		const dataUrl = this.renderer?.exportPng(state.nodes, state.connections);
+		if (!dataUrl) {
+			this.store.flash('Não há elementos para exportar.', true);
+			return;
+		}
+		downloadBlob(`${exportFileBaseName(state.projectName)}.png`, dataUrlToBlob(dataUrl));
+		this.store.flash('Imagem PNG exportada.');
+	}
+
+	async importJson(file: File): Promise<void> {
+		if (file.size > MAX_IMPORT_BYTES) {
+			this.store.flash('Arquivo grande demais para importar (máximo 1 MB).', true);
+			return;
+		}
+		const result = parseDiagramJson(await file.text());
+		if (!result.ok) {
+			this.store.flash(`Não foi possível importar: ${result.error}`, true);
+			return;
+		}
+		this.store.replaceDiagram(result.diagram);
+		this.store.flash('Diagrama importado. Salve para manter as alterações.');
+	}
+
 	selectNodeById(nodeId: string): void {
 		this.store.selectNode(nodeId);
 	}
@@ -447,7 +489,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		}
 		const key = event.key.toLowerCase();
 		const mod = event.ctrlKey || event.metaKey;
-		const target = event.target as HTMLElement | null;
+		const target = event.target instanceof HTMLElement ? event.target : null;
 		const typing = Boolean(target?.closest('input, textarea, select, [contenteditable="true"]'));
 
 		if (mod && key === 's') {
@@ -473,7 +515,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		}
 		if (typing || mod || event.altKey) {
 			if (key === 'escape' && typing) {
-				(target as HTMLElement).blur();
+				target?.blur();
 			}
 			return;
 		}

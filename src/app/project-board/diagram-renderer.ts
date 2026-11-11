@@ -1,5 +1,5 @@
 import Konva from 'konva';
-import { connectionPath } from './connection-geometry';
+import { connectionPath, nodesBounds } from './connection-geometry';
 import { DEFAULT_RADIUS, DEFAULT_RECT, clampNodeSize } from './diagram-constants';
 import { DiagramConnection, DiagramNode, DiagramViewport } from './project-board.model';
 import { zoomViewportAt } from './viewport-math';
@@ -27,6 +27,60 @@ export interface RendererEvents {
 }
 
 const PALETTE = { fill: '#0f1115', stroke: '#393b46', activeStroke: '#f7d046', text: '#f3f3f3' };
+
+function addNodeShapes(group: Konva.Group, node: DiagramNode, selected: boolean): void {
+	const stroke = selected ? PALETTE.activeStroke : PALETTE.stroke;
+	if (node.type === 'RECTANGLE') {
+		const width = node.width ?? DEFAULT_RECT.width;
+		const height = node.height ?? DEFAULT_RECT.height;
+		group.add(new Konva.Rect({ width, height, cornerRadius: 24, fill: PALETTE.fill, stroke, strokeWidth: 2, offsetX: width / 2, offsetY: height / 2 }));
+	} else {
+		group.add(new Konva.Circle({ radius: node.radius ?? DEFAULT_RADIUS, fill: PALETTE.fill, stroke, strokeWidth: 2 }));
+	}
+
+	const textWidth = node.type === 'RECTANGLE' ? (node.width ?? DEFAULT_RECT.width) : (node.radius ?? DEFAULT_RADIUS) * 2;
+	const textHeight = node.type === 'RECTANGLE' ? (node.height ?? DEFAULT_RECT.height) : (node.radius ?? DEFAULT_RADIUS) * 2;
+	group.add(
+		new Konva.Text({
+			text: node.name || 'Sample text',
+			fontFamily: 'Space Grotesk, Inter, sans-serif',
+			fontSize: 18,
+			fontStyle: '600',
+			fill: PALETTE.text,
+			width: textWidth,
+			height: textHeight,
+			align: 'center',
+			verticalAlign: 'middle',
+			offsetX: textWidth / 2,
+			offsetY: textHeight / 2,
+			listening: false
+		})
+	);
+}
+
+function addConnectionArrows(target: Konva.Group, nodes: DiagramNode[], connections: DiagramConnection[]): void {
+	const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+	for (const connection of connections) {
+		const from = nodesById.get(connection.fromNodeId);
+		const to = nodesById.get(connection.toNodeId);
+		const path = from && to ? connectionPath(from, to) : null;
+		if (!path) {
+			continue;
+		}
+		target.add(
+			new Konva.Arrow({
+				points: path.flatMap((point) => [point.x, point.y]),
+				stroke: '#f7d046',
+				fill: '#f7d046',
+				strokeWidth: 3,
+				pointerLength: 14,
+				pointerWidth: 14,
+				lineCap: 'round',
+				lineJoin: 'round'
+			})
+		);
+	}
+}
 
 /** Desenha o diagrama com Konva (grade, conexões e nós) e traduz o ponteiro em eventos de alto nível. */
 export class DiagramRenderer {
@@ -114,35 +168,7 @@ export class DiagramRenderer {
 				this.events.nodeClick(node.id);
 			});
 
-			const stroke = selectedId === node.id ? PALETTE.activeStroke : PALETTE.stroke;
-			if (node.type === 'RECTANGLE') {
-				const width = node.width ?? DEFAULT_RECT.width;
-				const height = node.height ?? DEFAULT_RECT.height;
-				group.add(
-					new Konva.Rect({ width, height, cornerRadius: 24, fill: PALETTE.fill, stroke, strokeWidth: 2, offsetX: width / 2, offsetY: height / 2 })
-				);
-			} else {
-				group.add(new Konva.Circle({ radius: node.radius ?? DEFAULT_RADIUS, fill: PALETTE.fill, stroke, strokeWidth: 2 }));
-			}
-
-			const textWidth = node.type === 'RECTANGLE' ? (node.width ?? DEFAULT_RECT.width) : (node.radius ?? DEFAULT_RADIUS) * 2;
-			const textHeight = node.type === 'RECTANGLE' ? (node.height ?? DEFAULT_RECT.height) : (node.radius ?? DEFAULT_RADIUS) * 2;
-			group.add(
-				new Konva.Text({
-					text: node.name || 'Sample text',
-					fontFamily: 'Space Grotesk, Inter, sans-serif',
-					fontSize: 18,
-					fontStyle: '600',
-					fill: PALETTE.text,
-					width: textWidth,
-					height: textHeight,
-					align: 'center',
-					verticalAlign: 'middle',
-					offsetX: textWidth / 2,
-					offsetY: textHeight / 2,
-					listening: false
-				})
-			);
+			addNodeShapes(group, node, selectedId === node.id);
 			if (selectedId === node.id) {
 				group.add(this.createResizeHandle(node));
 			}
@@ -154,31 +180,41 @@ export class DiagramRenderer {
 
 	renderConnections(nodes: DiagramNode[], connections: DiagramConnection[]): void {
 		this.connectionGroup.destroyChildren();
-		const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
-		for (const connection of connections) {
-			const from = nodesById.get(connection.fromNodeId);
-			const to = nodesById.get(connection.toNodeId);
-			if (!from || !to) {
-				continue;
-			}
-			const path = connectionPath(from, to);
-			if (!path) {
-				continue;
-			}
-			this.connectionGroup.add(
-				new Konva.Arrow({
-					points: path.flatMap((point) => [point.x, point.y]),
-					stroke: '#f7d046',
-					fill: '#f7d046',
-					strokeWidth: 3,
-					pointerLength: 14,
-					pointerWidth: 14,
-					lineCap: 'round',
-					lineJoin: 'round'
-				})
-			);
-		}
+		addConnectionArrows(this.connectionGroup, nodes, connections);
 		this.connectionLayer.batchDraw();
+	}
+
+	/**
+	 * Exporta o diagrama inteiro (não só a área visível) como PNG em data URL, com fundo escuro.
+	 * Devolve `null` quando não há nós.
+	 */
+	exportPng(nodes: DiagramNode[], connections: DiagramConnection[]): string | null {
+		const bounds = nodesBounds(nodes);
+		if (!bounds) {
+			return null;
+		}
+		const padding = 40;
+		const width = Math.ceil(bounds.maxX - bounds.minX + padding * 2);
+		const height = Math.ceil(bounds.maxY - bounds.minY + padding * 2);
+		const stage = new Konva.Stage({ container: document.createElement('div'), width, height });
+		try {
+			const layer = new Konva.Layer();
+			stage.add(layer);
+			layer.add(new Konva.Rect({ width, height, fill: '#0c0c0f' }));
+			const content = new Konva.Group({ x: padding - bounds.minX, y: padding - bounds.minY });
+			layer.add(content);
+			addConnectionArrows(content, nodes, connections);
+			for (const node of nodes) {
+				const group = new Konva.Group({ x: node.x, y: node.y });
+				addNodeShapes(group, node, false);
+				content.add(group);
+			}
+			layer.draw();
+			const pixelRatio = Math.min(2, 8000 / Math.max(width, height));
+			return stage.toDataURL({ pixelRatio, mimeType: 'image/png' });
+		} finally {
+			stage.destroy();
+		}
 	}
 
 	/** Mantém as alças com tamanho constante na tela, independente do zoom. */

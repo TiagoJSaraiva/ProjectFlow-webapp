@@ -148,6 +148,9 @@
         (zoomOut)="zoomBy(1 / 1.2)"
         (fit)="fitToContent()"
         (shortcuts)="shortcutsOpen.set(true)"
+        (exportPng)="exportPng()"
+        (exportJson)="exportJson()"
+        (importJson)="importJson($event)"
       />
       @if (linkModeActive()) {
         <div class="link-indicator">

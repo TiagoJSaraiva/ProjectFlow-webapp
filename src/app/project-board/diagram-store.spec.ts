@@ -195,4 +195,20 @@ describe('DiagramStore', () => {
       expect(store.nodes()[0].width).toBe(600);
     });
   });
+
+  describe('substituir diagrama (importação)', () => {
+    it('troca nós, conexões e viewport, marca como alterado e pode ser desfeito', () => {
+      store.replaceDiagram({
+        nodes: [{ id: 'z', type: 'CIRCLE', name: 'Z', description: '', x: 0, y: 0, rotation: 0 }],
+        connections: [],
+        viewport: { zoom: 2, offsetX: 1, offsetY: 2, gridSize: 64 }
+      });
+      expect(store.nodes().map((n) => n.id)).toEqual(['z']);
+      expect(store.viewport().zoom).toBe(2);
+      expect(store.state().isDirty).toBeTrue();
+      store.undo();
+      expect(store.nodes().length).toBe(2);
+      expect(store.connections().length).toBe(1);
+    });
+  });
 });

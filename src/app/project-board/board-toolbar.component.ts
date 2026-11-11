@@ -23,8 +23,17 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
           <span aria-hidden="true">⤢</span><span class="label">Ajustar</span>
         </button>
       </div>
-      <div class="group" role="group" aria-label="Arquivo">
-        <ng-content />
+      <div class="group" role="group" aria-label="Exportar e importar">
+        <button type="button" (click)="exportPng.emit()" aria-label="Exportar diagrama como imagem PNG" title="Exportar PNG">
+          <span aria-hidden="true">🖼</span><span class="label">PNG</span>
+        </button>
+        <button type="button" (click)="exportJson.emit()" aria-label="Exportar diagrama como arquivo JSON" title="Exportar JSON">
+          <span aria-hidden="true">⭳</span><span class="label">JSON</span>
+        </button>
+        <button type="button" (click)="fileInput.click()" aria-label="Importar diagrama de um arquivo JSON" title="Importar JSON">
+          <span aria-hidden="true">⭱</span><span class="label">Importar</span>
+        </button>
+        <input #fileInput class="file-input" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
       </div>
       <div class="group" role="group" aria-label="Ajuda">
         <button type="button" (click)="shortcuts.emit()" aria-label="Ver atalhos de teclado" title="Atalhos de teclado">
@@ -51,7 +60,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
       align-items: center;
       gap: 0.35rem;
     }
-    button, ::ng-deep .group button {
+    button {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
@@ -78,6 +87,9 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
     button:focus-visible {
       outline: 3px solid #ffffff;
       outline-offset: 2px;
+    }
+    .file-input {
+      display: none;
     }
     .zoom-value {
       min-width: 3.2rem;
@@ -106,4 +118,16 @@ export class BoardToolbarComponent {
   readonly zoomOut = output<void>();
   readonly fit = output<void>();
   readonly shortcuts = output<void>();
+  readonly exportPng = output<void>();
+  readonly exportJson = output<void>();
+  readonly importJson = output<File>();
+
+  protected onFileChosen(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // permite escolher o mesmo arquivo de novo
+    if (file) {
+      this.importJson.emit(file);
+    }
+  }
 }

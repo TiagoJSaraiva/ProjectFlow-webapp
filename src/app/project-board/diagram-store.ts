@@ -117,6 +117,16 @@ export class DiagramStore {
 		this.patch({ ...extra, statusMessage: message });
 	}
 
+	/** Mensagem temporária no header (some sozinha, voltando ao estado de salvamento). */
+	flash(message: string, isError = false, durationMs = 5000): void {
+		this.setStatus(message, isError);
+		setTimeout(() => {
+			if (this.state().statusMessage === message) {
+				this.setStatus(null);
+			}
+		}, durationMs);
+	}
+
 	hydrate(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
 		this.statusError.set(false);
 		this.history.clear();
@@ -235,6 +245,21 @@ export class DiagramStore {
 		this.state.update((current) => ({
 			...current,
 			nodes: current.nodes.map((node) => (node.id === selected ? ({ ...node, [field]: normalized } as DiagramNode) : node)),
+			isDirty: true
+		}));
+	}
+
+	/** Substitui todo o diagrama (importação). Pode ser desfeito. */
+	replaceDiagram(content: { nodes: DiagramNode[]; connections: DiagramConnection[]; viewport: DiagramViewport }): void {
+		this.record();
+		this.state.update((current) => ({
+			...current,
+			nodes: content.nodes,
+			connections: content.connections,
+			viewport: content.viewport,
+			selectedNodeId: null,
+			linkSourceId: null,
+			sidebarMode: 'catalog',
 			isDirty: true
 		}));
 	}
