@@ -117,18 +117,19 @@ export class LocalProjectRepository extends ProjectRepository {
       if (tooLong) {
         throw apiError(422, `O nome do nó não pode ultrapassar ${NODE_NAME_LIMIT} caracteres.`);
       }
-      if (!payload.project.name.trim()) {
+      const name = payload.project.name.trim(); // como o servidor: sem espaços nas pontas e não vazio
+      if (!name) {
         throw apiError(400, 'O nome do projeto é obrigatório.');
       }
       const now = new Date().toISOString();
-      project.nome = payload.project.name;
+      project.nome = name;
       project.descricao = payload.project.description;
       project.ultimaAlteracao = now;
       project.ultimoAcesso = now;
       project.totalTarefas = payload.nodes.length;
       db.diagrams[projectId] = {
         projectId,
-        projectName: payload.project.name,
+        projectName: name,
         projectDescription: payload.project.description,
         viewport: payload.viewport,
         nodes: payload.nodes,

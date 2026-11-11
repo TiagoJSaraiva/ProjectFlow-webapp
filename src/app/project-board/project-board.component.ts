@@ -8,6 +8,7 @@ import {
 	OnDestroy,
 	OnInit,
 	ViewChild,
+	computed,
 	effect,
 	inject,
 	signal
@@ -73,6 +74,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	readonly canUndo = this.store.canUndo;
 	readonly canRedo = this.store.canRedo;
 	readonly nodeNameMaxLength = NODE_NAME_MAX_LENGTH;
+	readonly projectNameMissing = computed(() => this.store.state().projectName.trim() === '');
 	readonly shortcuts = SHORTCUTS;
 
 	readonly deleteDialogOpen = signal(false);
@@ -345,6 +347,11 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 				`O nome do nó "${invalidNode.name.slice(0, 20)}..." excede o limite de ${NODE_NAME_MAX_LENGTH} caracteres.`,
 				true
 			);
+			onError?.();
+			return;
+		}
+		if (this.projectNameMissing()) {
+			this.store.setStatus('Informe um nome para o projeto antes de salvar.', true);
 			onError?.();
 			return;
 		}

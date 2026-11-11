@@ -93,6 +93,17 @@ describe('LocalProjectRepository', () => {
     expect(error.error.message).toContain('35');
   });
 
+  it('grava o nome do projeto sem espaços nas pontas e rejeita nome em branco, como o servidor', async () => {
+    const created = await firstValueFrom(repo.create('X'));
+    const base = { viewport: { zoom: 1, offsetX: 0, offsetY: 0, gridSize: 64 }, nodes: [], connections: [] };
+    const saved = await firstValueFrom(repo.saveDiagram(created.id, { ...base, project: { name: '  Meu projeto  ', description: '' } }));
+    expect(saved.projectName).toBe('Meu projeto');
+    expect((await firstValueFrom(repo.list())).find((p) => p.id === created.id)!.nome).toBe('Meu projeto');
+
+    const error = await firstValueFrom(repo.saveDiagram(created.id, { ...base, project: { name: '   ', description: '' } })).catch((e) => e);
+    expect(error.status).toBe(400);
+  });
+
   it('devolve 404 para projeto inexistente', async () => {
     const error = await firstValueFrom(repo.loadDiagram('nao-existe')).catch((e) => e);
     expect(error.status).toBe(404);

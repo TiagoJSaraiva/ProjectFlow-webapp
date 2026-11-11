@@ -75,7 +75,10 @@
           <h3>Sobre o projeto</h3>
           <label>
             <span>Nome</span>
-            <input type="text" maxlength="100" [ngModel]="state().projectName" (ngModelChange)="onProjectNameChange($event)" />
+            <input type="text" maxlength="100" [ngModel]="state().projectName" (ngModelChange)="onProjectNameChange($event)" [attr.aria-invalid]="projectNameMissing()" aria-describedby="project-name-hint" required />
+            @if (projectNameMissing()) {
+              <small id="project-name-hint" class="field-hint limit" role="alert">O nome do projeto é obrigatório.</small>
+            }
           </label>
           <label>
             <span>Descrição</span>

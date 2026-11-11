@@ -130,6 +130,31 @@ describe('ProjectBoardComponent', () => {
       expect(root().querySelector('.status.error')).not.toBeNull();
     });
 
+    it('nome com espaços nas pontas é enviado sem eles e confirmado normalmente', () => {
+      repo.saveDiagram.and.callFake((id: string, payload: SaveProjectDiagramPayload) => of(echo(id, payload)));
+      create();
+      component.onProjectNameChange('  Meu projeto  ');
+      component.onSave();
+
+      expect(repo.saveDiagram.calls.mostRecent().args[1].project.name).toBe('Meu projeto');
+      expect(state().isDirty).toBeFalse();
+      expect(state().statusMessage).toBe('Diagrama salvo com sucesso.');
+      expect(state().projectName).toBe('Meu projeto');
+    });
+
+    it('nome em branco não é enviado e mostra a mensagem junto ao campo', () => {
+      create();
+      component.setSidebarMode('project');
+      component.onProjectNameChange('   ');
+      fixture.detectChanges();
+      expect(root().querySelector('#project-name-hint')?.textContent).toContain('obrigatório');
+
+      component.onSave();
+      expect(repo.saveDiagram).not.toHaveBeenCalled();
+      expect(state().statusMessage).toContain('nome');
+      expect(state().isDirty).toBeTrue();
+    });
+
     it('edição feita durante o salvamento não é perdida nem dada como salva', () => {
       const pending = new Subject<ProjectDiagramResponse>();
       let sent!: SaveProjectDiagramPayload;

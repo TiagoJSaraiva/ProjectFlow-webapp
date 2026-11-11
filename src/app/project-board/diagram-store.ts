@@ -152,7 +152,7 @@ export class DiagramStore {
 	buildPayload(): SaveProjectDiagramPayload {
 		const state = this.state();
 		return {
-			project: { name: state.projectName, description: state.projectDescription },
+			project: { name: state.projectName.trim(), description: state.projectDescription },
 			viewport: state.viewport,
 			nodes: state.nodes,
 			connections: state.connections
@@ -169,10 +169,16 @@ export class DiagramStore {
 		const unchanged =
 			current.nodes === payload.nodes &&
 			current.connections === payload.connections &&
-			current.projectName === payload.project.name &&
+			current.projectName.trim() === payload.project.name && // o nome é enviado e comparado sem espaços nas pontas
 			current.projectDescription === payload.project.description;
 		this.statusError.set(false);
-		this.patch({ isSaving: false, isDirty: !unchanged, statusMessage: unchanged ? 'Diagrama salvo com sucesso.' : null });
+		this.patch({
+			isSaving: false,
+			isDirty: !unchanged,
+			// mostra o nome já normalizado (sem espaços nas pontas) quando o usuário não o alterou desde o envio
+			projectName: current.projectName.trim() === payload.project.name ? payload.project.name : current.projectName,
+			statusMessage: unchanged ? 'Diagrama salvo com sucesso.' : null
+		});
 		return unchanged;
 	}
 
