@@ -1,36 +1,37 @@
 import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  HostListener,
-  Injector,
-  OnDestroy,
-  OnInit,
-  ViewChild,
-  computed,
-  effect,
-  inject,
-  signal,
-  ChangeDetectionStrategy
+	AfterViewInit,
+	ChangeDetectionStrategy,
+	Component,
+	ElementRef,
+	HostListener,
+	Injector,
+	OnDestroy,
+	OnInit,
+	ViewChild,
+	effect,
+	inject,
+	signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import Konva from 'konva';
 import { Subject, takeUntil } from 'rxjs';
-import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
-import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
-import { getApiErrorMessage } from '../shared/api-error';
 import { ProjectRepository } from '../data/project-repository';
+import { getApiErrorMessage } from '../shared/api-error';
+import { DialogAction, DialogComponent } from '../shared/dialog.component';
+import { NODE_NAME_MAX_LENGTH } from './diagram-constants';
+import { DiagramRenderer } from './diagram-renderer';
+import { DiagramStore } from './diagram-store';
+import { DiagramNode, DiagramNodeType } from './project-board.model';
 
-const DEFAULT_RECT = { width: 200, height: 120 };
-const DEFAULT_RADIUS = 64;
-const NODE_NAME_MAX_LENGTH = 35;
 type UnsavedDialogChoice = 'save' | 'discard' | 'cancel';
+
+const PALETTE_MIME = 'application/x-projectflow-node';
 
 @Component({
 	selector: 'app-project-board',
 	standalone: true,
-	imports: [FormsModule],
+	imports: [FormsModule, DialogComponent],
+	providers: [DiagramStore],
 	templateUrl: './project-board.component.html',
 	changeDetection: ChangeDetectionStrategy.Eager,
 	styleUrl: './project-board.component.css'
@@ -39,109 +40,47 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	@ViewChild('stageContainer', { static: true })
 	stageContainer?: ElementRef<HTMLDivElement>;
 
-	readonly state = signal<ProjectBoardState>({
-		projectId: '',
-		projectName: '',
-		projectDescription: '',
-		viewport: { zoom: 1, offsetX: 0, offsetY: 0, gridSize: 64 },
-		nodes: [],
-		connections: [],
-		selectedNodeId: null,
-		sidebarMode: 'catalog',
-		linkSourceId: null,
-		isDirty: false,
-		isSaving: false,
-		isDeleting: false,
-		isLoading: true,
-		statusMessage: null
-	});
+	private readonly store = inject(DiagramStore);
+	private readonly route = inject(ActivatedRoute);
+	private readonly router = inject(Router);
+	private readonly repository = inject(ProjectRepository);
+	private readonly injector = inject(Injector);
 
-	readonly nodes = computed(() => this.state().nodes);
-	readonly connections = computed(() => this.state().connections);
-	readonly viewport = computed(() => this.state().viewport);
-	readonly selectedNode = computed(() => this.state().nodes.find((n) => n.id === this.state().selectedNodeId) ?? null);
-	readonly effectiveSidebarMode = computed(() => (this.state().selectedNodeId ? 'node' : this.state().sidebarMode));
-	readonly selectedConnections = computed(() => {
-		const selected = this.state().selectedNodeId;
-		if (!selected) {
-			return [];
-		}
-		return this.state().connections.filter((conn) => conn.fromNodeId === selected || conn.toNodeId === selected);
-	});
-	readonly linkModeActive = computed(() => Boolean(this.state().linkSourceId));
-	private readonly statusIsError = signal(false);
+	readonly state = this.store.state;
+	readonly selectedNode = this.store.selectedNode;
+	readonly effectiveSidebarMode = this.store.effectiveSidebarMode;
+	readonly selectedConnections = this.store.selectedConnections;
+	readonly linkModeActive = this.store.linkModeActive;
+	readonly nodeNameMaxLength = NODE_NAME_MAX_LENGTH;
+
 	readonly deleteDialogOpen = signal(false);
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
-	private readonly injector = inject(Injector);
-	private readonly viewportEffect = effect(
-		() => {
-			const state = this.state();
-			const viewport = state.viewport;
-			if (!this.stage) {
-				return;
-			}
-			try {
-				this.renderViewport(viewport);
-			} catch (error) {
-				console.error('[ProjectBoard] Failed to render viewport', { viewport, error });
-			}
-		},
-		{ injector: this.injector }
-	);
-	private readonly diagramEffect = effect(
-		() => {
-			const state = this.state();
-			if (!this.stage) {
-				return;
-			}
-			if (!this.stage) {
-				return;
-			}
-			const nodes = state.nodes;
-			const connections = state.connections;
-			const selectedId = state.selectedNodeId;
-			const linkSourceId = state.linkSourceId;
-			try {
-				this.renderNodes(nodes, selectedId, linkSourceId);
-				this.renderConnections(nodes, connections);
-			} catch (error) {
-				console.error('[ProjectBoard] Diagram render failed', {
-					nodeCount: nodes.length,
-					connectionCount: connections.length,
-					error
-				});
-			}
-		},
-		{ injector: this.injector }
-	);
 
-	private destroy$ = new Subject<void>();
-	private stage?: Konva.Stage;
-	private gridLayer?: Konva.Layer;
-	private connectionLayer?: Konva.Layer;
-	private nodeLayer?: Konva.Layer;
-	private gridGroup?: Konva.Group;
-	private connectionGroup?: Konva.Group;
-	private nodeGroup?: Konva.Group;
-	private panSurface?: Konva.Rect;
-	private isPanning = false;
-	private panStart: { x: number; y: number } | null = null;
-	private viewportStart: DiagramViewport | null = null;
+	private renderer?: DiagramRenderer;
+	private readonly destroy$ = new Subject<void>();
 	private paletteDragType: DiagramNodeType | null = null;
-	private resizeObserver?: ResizeObserver;
-	private currentGridSize: number | null = null;
 	private unsavedDialogResolver: ((choice: UnsavedDialogChoice) => void) | null = null;
 	private readonly supportsNativeBeforeUnload = typeof window !== 'undefined' && 'onbeforeunload' in window;
 	private unloadIntent: 'reload' | 'close' | null = null;
 	private fallbackAction: 'reload' | 'close' | null = null;
 	private allowExternalUnload = false;
 
-	constructor(
-		private readonly route: ActivatedRoute,
-		private readonly router: Router,
-		private readonly repository: ProjectRepository
-	) {}
+	private readonly viewportEffect = effect(
+		() => {
+			const viewport = this.store.viewport();
+			this.safely('viewport', () => this.renderer?.setViewport(viewport));
+		},
+		{ injector: this.injector }
+	);
+
+	private readonly diagramEffect = effect(
+		() => {
+			const state = this.store.state();
+			this.safely('diagram', () => this.renderDiagram(state.nodes, state.connections, state.selectedNodeId));
+		},
+		{ injector: this.injector }
+	);
 
 	ngOnInit(): void {
 		this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
@@ -155,299 +94,206 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	ngAfterViewInit(): void {
-		this.initStage();
-		this.safeRenderAll();
+		const container = this.stageContainer?.nativeElement;
+		if (!container) {
+			return;
+		}
+		this.renderer = new DiagramRenderer(container, {
+			getViewport: () => this.store.viewport(),
+			nodeClick: (id) => this.onNodeClick(id),
+			nodeDragMove: (id, x, y) => this.previewConnectionsWhileDragging(id, x, y),
+			nodeDragEnd: (id, x, y) => this.store.moveNode(id, x, y),
+			backgroundClick: () => this.store.clearSelection(),
+			viewportChange: (viewport) => this.store.setViewport(viewport),
+			viewportCommit: () => this.store.markDirty()
+		});
+		this.safely('initial', () => {
+			this.renderer?.setViewport(this.store.viewport());
+			this.renderDiagram(this.store.nodes(), this.store.connections(), this.store.state().selectedNodeId);
+		});
 	}
 
 	ngOnDestroy(): void {
 		this.destroy$.next();
 		this.destroy$.complete();
-		this.resizeObserver?.disconnect();
-		this.stage?.destroy();
+		this.renderer?.destroy();
 	}
 
-	trackByNode(_: number, node: DiagramNode): string {
-		return node.id;
-	}
-
-	trackByConnection(_: number, connection: DiagramConnection): string {
-		return connection.id;
-	}
+	// --- Sidebar / seleção ---------------------------------------------------------------
 
 	setSidebarMode(mode: 'catalog' | 'project'): void {
-		this.updateState({ sidebarMode: mode, selectedNodeId: mode === 'project' ? null : this.state().selectedNodeId });
-	}
-
-	selectNode(nodeId: string): void {
-		this.updateState({ selectedNodeId: nodeId });
+		this.store.setSidebarMode(mode);
 	}
 
 	clearSelection(): void {
-		this.updateState({ selectedNodeId: null, linkSourceId: null, sidebarMode: 'catalog' });
+		this.store.clearSelection();
 	}
+
+	startLinkWorkflow(nodeId: string): void {
+		this.store.startLink(nodeId);
+	}
+
+	cancelLinkWorkflow(): void {
+		this.store.cancelLink();
+	}
+
+	deleteNode(nodeId: string): void {
+		this.store.deleteNode(nodeId);
+	}
+
+	deleteConnection(connectionId: string): void {
+		this.store.deleteConnection(connectionId);
+	}
+
+	resolveNodeLabel(nodeId: string): string {
+		return this.store.resolveNodeLabel(nodeId);
+	}
+
+	isErrorStatus(): boolean {
+		return this.store.isErrorStatus();
+	}
+
+	updateNodeField(field: keyof DiagramNode, value: string | number): void {
+		this.store.updateSelectedNodeField(field, value);
+	}
+
+	onProjectNameChange(value: string): void {
+		this.store.setProjectName(value);
+	}
+
+	onProjectDescriptionChange(value: string): void {
+		this.store.setProjectDescription(value);
+	}
+
+	trackByConnection(_: number, connection: { id: string }): string {
+		return connection.id;
+	}
+
+	// --- Arrastar da paleta para o canvas -------------------------------------------------
 
 	onPaletteDragStart(event: DragEvent, type: DiagramNodeType): void {
 		this.paletteDragType = type;
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = 'copy';
-			event.dataTransfer.setData('application/x-projectflow-node', type);
+			event.dataTransfer.setData(PALETTE_MIME, type);
 			event.dataTransfer.setData('text/plain', type);
 		}
 	}
 
-	onCanvasDragOver(event: DragEvent): void {
+	@HostListener('document:dragover', ['$event'])
+	handleDocumentDragOver(event: DragEvent): void {
+		if (!this.renderer?.isInside(event.clientX, event.clientY) || !this.isPaletteDrag(event)) {
+			return;
+		}
 		event.preventDefault();
 		if (event.dataTransfer) {
 			event.dataTransfer.dropEffect = 'copy';
 		}
 	}
 
-	onCanvasDrop(event: DragEvent): void {
+	@HostListener('document:drop', ['$event'])
+	handleDocumentDrop(event: DragEvent): void {
+		if (!this.renderer?.isInside(event.clientX, event.clientY) || !this.isPaletteDrag(event)) {
+			return;
+		}
 		event.preventDefault();
-		const type = (event.dataTransfer?.getData('application/x-projectflow-node') as DiagramNodeType) ?? this.paletteDragType;
+		const type = (event.dataTransfer?.getData(PALETTE_MIME) as DiagramNodeType) || this.paletteDragType;
 		if (!type) {
 			return;
 		}
-		const position = this.clientToWorld(event.clientX, event.clientY);
-		this.addNode(type, position);
+		this.store.addNode(type, this.renderer.clientToWorld(event.clientX, event.clientY));
 		this.paletteDragType = null;
 	}
 
-	@HostListener('document:dragover', ['$event'])
-	handleDocumentDragOver(event: DragEvent): void {
-		if (!this.isPointerInsideStage(event.clientX, event.clientY) || !this.isProjectflowDrag(event)) {
-			return;
-		}
-		this.onCanvasDragOver(event);
-	}
-
-	@HostListener('document:drop', ['$event'])
-	handleDocumentDrop(event: DragEvent): void {
-		if (!this.isPointerInsideStage(event.clientX, event.clientY) || !this.isProjectflowDrag(event)) {
-			return;
-		}
-		this.onCanvasDrop(event);
-	}
-
-	@HostListener('window:keydown', ['$event'])
-	handleWindowKeydown(event: KeyboardEvent): void {
-		if (!this.state().isDirty) {
-			return;
-		}
-		const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
-		if (!isReloadShortcut) {
-			return;
-		}
-		this.unloadIntent = 'reload';
-	}
-
-	@HostListener('window:beforeunload', ['$event'])
-	handleBeforeUnload(event: BeforeUnloadEvent): void {
-		if (!this.state().isDirty || this.allowExternalUnload) {
-			this.unloadIntent = null;
-			return;
-		}
-		const intent = this.unloadIntent ?? 'close';
-		if (this.supportsNativeBeforeUnload) {
-			event.preventDefault();
-			event.returnValue = '';
-			this.unloadIntent = null;
-			this.fallbackAction = null;
-			return;
-		}
-		event.preventDefault();
-		this.fallbackAction = intent;
-		if (intent === 'reload') {
-			this.reloadDialogOpen.set(true);
-		} else {
-			this.showFallbackUnsavedExitDialog();
-		}
-		this.unloadIntent = null;
-	}
-
-	private isPointerInsideStage(clientX: number, clientY: number): boolean {
-		const container = this.stageContainer?.nativeElement;
-		if (!container) {
-			return false;
-		}
-		const bounds = container.getBoundingClientRect();
-		return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom;
-	}
-
-	private isProjectflowDrag(event: DragEvent): boolean {
-		const typeList = event.dataTransfer?.types;
-		if (!typeList) {
+	private isPaletteDrag(event: DragEvent): boolean {
+		const types = event.dataTransfer?.types;
+		if (!types) {
 			return Boolean(this.paletteDragType);
 		}
-		if (Array.isArray(typeList)) {
-			return typeList.includes('application/x-projectflow-node');
-		}
-		const domList = typeList as unknown as DOMStringList;
-		if (typeof domList.contains === 'function') {
-			return domList.contains('application/x-projectflow-node');
-		}
-		for (let index = 0; index < domList.length; index += 1) {
-			const value = domList.item ? domList.item(index) : (domList as unknown as Record<number, string | undefined>)[index];
-			if (value === 'application/x-projectflow-node') {
-				return true;
-			}
-		}
-		return Boolean(this.paletteDragType);
+		return Array.from(types as ArrayLike<string>).includes(PALETTE_MIME) || Boolean(this.paletteDragType);
 	}
 
-	startLinkWorkflow(nodeId: string): void {
-		this.updateState({ linkSourceId: nodeId });
-	}
-
-	cancelLinkWorkflow(): void {
-		this.updateState({ linkSourceId: null });
-	}
-
-	deleteNode(nodeId: string): void {
-		this.state.update((current) => ({
-			...current,
-			nodes: current.nodes.filter((node) => node.id !== nodeId),
-			connections: current.connections.filter((conn) => conn.fromNodeId !== nodeId && conn.toNodeId !== nodeId),
-			selectedNodeId: current.selectedNodeId === nodeId ? null : current.selectedNodeId,
-			linkSourceId: current.linkSourceId === nodeId ? null : current.linkSourceId,
-			isDirty: true
-		}));
-	}
-
-	deleteConnection(connectionId: string): void {
-		this.state.update((current) => ({
-			...current,
-			connections: current.connections.filter((conn) => conn.id !== connectionId),
-			isDirty: true
-		}));
-	}
-
-	resolveNodeLabel(nodeId: string): string {
-		const node = this.state().nodes.find((candidate) => candidate.id === nodeId);
-		return node?.name ?? 'Sample text';
-	}
-
-	isErrorStatus(): boolean {
-		return this.statusIsError() && Boolean(this.state().statusMessage);
-	}
-
-	readonly nodeNameMaxLength = NODE_NAME_MAX_LENGTH;
-
-	/** Registra uma falha no status do header (em vermelho). */
-	private fail(patch: Partial<ProjectBoardState>): void {
-		this.statusIsError.set(true);
-		this.updateState(patch);
-	}
-
-	updateNodeField(field: keyof DiagramNode, value: string | number): void {
-		const selected = this.state().selectedNodeId;
-		if (!selected) {
-			return;
-		}
-		const normalizedValue =
-			typeof value === 'number'
-				? value
-				: field === 'name'
-					? this.truncateNodeName(value)
-					: value;
-		this.state.update((current) => ({
-			...current,
-			nodes: current.nodes.map((node) => {
-				if (node.id !== selected) {
-					return node;
-				}
-				return { ...node, [field]: normalizedValue } as DiagramNode;
-			}),
-			isDirty: true
-		}));
-	}
-
-	onProjectNameChange(value: string): void {
-		this.updateState({ projectName: value.slice(0, 100), isDirty: true });
-	}
-
-	onProjectDescriptionChange(value: string): void {
-		this.updateState({ projectDescription: value.slice(0, 10000), isDirty: true });
-	}
+	// --- Persistência --------------------------------------------------------------------
 
 	onSave(afterSave?: () => void, onError?: () => void): void {
-		if (!this.state().projectId || this.state().isSaving) {
+		const state = this.store.state();
+		if (!state.projectId || state.isSaving) {
 			return;
 		}
-		const invalidNode = this.state().nodes.find((node) => (node.name ?? '').length > NODE_NAME_MAX_LENGTH);
+		const invalidNode = this.store.findInvalidNodeName();
 		if (invalidNode) {
-			this.fail({
-				statusMessage: `O nome do nó "${invalidNode.name.slice(0, 20)}..." excede o limite de ${NODE_NAME_MAX_LENGTH} caracteres.`
-			});
+			this.store.setStatus(
+				`O nome do nó "${invalidNode.name.slice(0, 20)}..." excede o limite de ${NODE_NAME_MAX_LENGTH} caracteres.`,
+				true
+			);
 			onError?.();
 			return;
 		}
-		this.statusIsError.set(false);
-		this.updateState({ isSaving: true, statusMessage: 'Salvando alterações...' });
-		const payload = this.buildPayload();
+		this.store.setStatus('Salvando alterações...', false, { isSaving: true });
+		const payload = this.store.buildPayload();
 		this.repository
-			.saveDiagram(this.state().projectId, payload)
+			.saveDiagram(state.projectId, payload)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: (response) => {
 					// Só confirma o sucesso quando o servidor devolve o que foi enviado.
 					const confirmed =
-						response?.projectId === this.state().projectId &&
+						response?.projectId === this.store.state().projectId &&
 						(response.projectName ?? '') === payload.project.name &&
 						(response.projectDescription ?? '') === payload.project.description;
 					if (!confirmed) {
 						// Mantém as edições locais; nada é dado como salvo.
-						this.fail({
+						this.store.setStatus('O servidor não confirmou o nome/descrição do projeto. Tente salvar novamente.', true, {
 							isSaving: false,
-							isDirty: true,
-							statusMessage: 'O servidor não confirmou o nome/descrição do projeto. Tente salvar novamente.'
+							isDirty: true
 						});
 						onError?.();
 						return;
 					}
-					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
+					this.store.hydrate(response, true, 'Diagrama salvo com sucesso.');
 					afterSave?.();
 				},
 				error: (error: unknown) => {
-					this.fail({
-						isSaving: false,
-						statusMessage: getApiErrorMessage(error, 'Não foi possível salvar o projeto. Tente novamente.')
-					});
+					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível salvar o projeto. Tente novamente.'), true, { isSaving: false });
 					onError?.();
 				}
 			});
 	}
 
-	goBack(): void {
-		if (!this.state().isDirty) {
-			this.router.navigateByUrl('/');
-			return;
-		}
-		this.promptUnsavedDialog().then((choice) => this.handleUnsavedChoice(choice, () => this.router.navigateByUrl('/')));
+	private loadDiagram(projectId: string): void {
+		this.store.patch({ isLoading: true, projectId });
+		this.repository
+			.loadDiagram(projectId)
+			.pipe(takeUntil(this.destroy$))
+			.subscribe({
+				next: (response) => this.store.hydrate(response, true, null),
+				error: (error: unknown) =>
+					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível carregar o projeto.'), true, { isLoading: false })
+			});
 	}
 
 	deleteProject(): void {
-		const projectId = this.state().projectId;
-		if (!projectId || this.state().isDeleting) {
+		const state = this.store.state();
+		if (!state.projectId || state.isDeleting) {
 			return;
 		}
 		this.deleteDialogOpen.set(true);
 	}
 
 	confirmDeleteProject(): void {
-		const projectId = this.state().projectId;
-		if (!projectId || this.state().isDeleting) {
+		const state = this.store.state();
+		if (!state.projectId || state.isDeleting) {
 			return;
 		}
 		this.deleteDialogOpen.set(false);
-		this.updateState({ isDeleting: true, statusMessage: 'Apagando projeto...' });
+		this.store.setStatus('Apagando projeto...', false, { isDeleting: true });
 		this.repository
-			.delete(projectId)
+			.delete(state.projectId)
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: () => this.router.navigateByUrl('/'),
 				error: (error: unknown) =>
-					this.fail({ isDeleting: false, statusMessage: getApiErrorMessage(error, 'Não foi possível apagar o projeto.') })
+					this.store.setStatus(getApiErrorMessage(error, 'Não foi possível apagar o projeto.'), true, { isDeleting: false })
 			});
 	}
 
@@ -455,24 +301,32 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		this.deleteDialogOpen.set(false);
 	}
 
+	// --- Saída com alterações pendentes ---------------------------------------------------
+
+	goBack(): void {
+		if (!this.store.state().isDirty) {
+			this.router.navigateByUrl('/');
+			return;
+		}
+		this.promptUnsavedDialog().then((choice) => this.handleUnsavedChoice(choice, () => this.router.navigateByUrl('/')));
+	}
+
 	requestUnsavedExitPermission(): Promise<boolean> {
-		if (!this.state().isDirty) {
+		if (!this.store.state().isDirty) {
 			return Promise.resolve(true);
 		}
 		return new Promise<boolean>((resolve) => {
 			this.promptUnsavedDialog().then((choice) => {
 				if (choice === 'cancel') {
 					resolve(false);
-					return;
-				}
-				if (choice === 'save') {
+				} else if (choice === 'save') {
 					this.onSave(
 						() => resolve(true),
 						() => resolve(false)
 					);
-					return;
+				} else {
+					resolve(true);
 				}
-				resolve(true);
 			});
 		});
 	}
@@ -483,7 +337,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 	confirmReload(): void {
 		this.reloadDialogOpen.set(false);
-		if (!this.state().isDirty) {
+		if (!this.store.state().isDirty) {
 			window.location.reload();
 			return;
 		}
@@ -501,6 +355,40 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		this.unloadIntent = null;
 	}
 
+	@HostListener('window:keydown', ['$event'])
+	handleWindowKeydown(event: KeyboardEvent): void {
+		if (!this.store.state().isDirty) {
+			return;
+		}
+		const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
+		if (isReloadShortcut) {
+			this.unloadIntent = 'reload';
+		}
+	}
+
+	@HostListener('window:beforeunload', ['$event'])
+	handleBeforeUnload(event: BeforeUnloadEvent): void {
+		if (!this.store.state().isDirty || this.allowExternalUnload) {
+			this.unloadIntent = null;
+			return;
+		}
+		const intent = this.unloadIntent ?? 'close';
+		event.preventDefault();
+		if (this.supportsNativeBeforeUnload) {
+			event.returnValue = '';
+			this.unloadIntent = null;
+			this.fallbackAction = null;
+			return;
+		}
+		this.fallbackAction = intent;
+		if (intent === 'reload') {
+			this.reloadDialogOpen.set(true);
+		} else {
+			this.showFallbackUnsavedExitDialog();
+		}
+		this.unloadIntent = null;
+	}
+
 	private handleUnsavedChoice(choice: UnsavedDialogChoice, continueCallback: () => void): void {
 		if (choice === 'cancel') {
 			return;
@@ -513,9 +401,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	private promptUnsavedDialog(): Promise<UnsavedDialogChoice> {
-		if (this.unsavedDialogResolver) {
-			this.unsavedDialogResolver('cancel');
-		}
+		this.unsavedDialogResolver?.('cancel');
 		this.unsavedDialogOpen.set(true);
 		return new Promise((resolve) => {
 			this.unsavedDialogResolver = (choice) => {
@@ -546,469 +432,55 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			return;
 		}
 		window.close();
-		setTimeout(() => {
-			this.allowExternalUnload = false;
-		}, 0);
+		setTimeout(() => (this.allowExternalUnload = false), 0);
 	}
 
-	private loadDiagram(projectId: string): void {
-		this.updateState({ isLoading: true, projectId });
-		this.repository
-			.loadDiagram(projectId)
-			.pipe(takeUntil(this.destroy$))
-			.subscribe({
-				next: (response) => {
-					this.hydrateState(response, true, null);
-				},
-				error: (error: unknown) =>
-					this.fail({ isLoading: false, statusMessage: getApiErrorMessage(error, 'Não foi possível carregar o projeto.') })
-			});
-	}
+	// --- Diálogos (definição das ações) ----------------------------------------------------
 
-	private hydrateState(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
-		this.statusIsError.set(false);
-		const sanitizedNodes = (response.nodes ?? []).map((node) => ({
-			...node,
-			name: this.truncateNodeName(node.name ?? 'Sample text')
-		}));
-		this.state.set({
-			projectId: response.projectId,
-			projectName: response.projectName ?? 'Projeto sem nome',
-			projectDescription: response.projectDescription ?? '',
-			viewport: response.viewport ?? { zoom: 1, offsetX: 0, offsetY: 0, gridSize: 64 },
-			nodes: sanitizedNodes,
-			connections: response.connections ?? [],
-			selectedNodeId: null,
-			sidebarMode: 'catalog',
-			linkSourceId: null,
-			isDirty: markClean ? false : this.state().isDirty,
-			isSaving: false,
-			isDeleting: false,
-			isLoading: false,
-			statusMessage
-		});
-	}
+	readonly deleteActions = (): DialogAction[] => [
+		{ value: 'yes', label: 'Sim', kind: 'danger', disabled: this.store.state().isDeleting },
+		{ value: 'no', label: 'Não', kind: 'secondary' }
+	];
+	readonly reloadActions: DialogAction[] = [
+		{ value: 'reload', label: 'Recarregar', kind: 'primary' },
+		{ value: 'cancel', label: 'Cancelar', kind: 'secondary' }
+	];
+	readonly unsavedActions = (): DialogAction[] => {
+		const saving = this.store.state().isSaving;
+		return [
+			{ value: 'save', label: saving ? 'Salvando...' : 'Salvar e sair', kind: 'primary', disabled: saving },
+			{ value: 'discard', label: 'Sair sem salvar', kind: 'danger', disabled: saving },
+			{ value: 'cancel', label: 'Cancelar', kind: 'secondary', disabled: saving }
+		];
+	};
 
-	private updateState(patch: Partial<ProjectBoardState>): void {
-		this.state.update((current) => ({ ...current, ...patch }));
-	}
+	// --- Interação com o canvas ------------------------------------------------------------
 
-	private initStage(): void {
-		const container = this.stageContainer?.nativeElement;
-		if (!container) {
+	private onNodeClick(nodeId: string): void {
+		const linkSource = this.store.state().linkSourceId;
+		if (linkSource && linkSource !== nodeId) {
+			this.store.completeConnection(nodeId);
 			return;
 		}
-
-		this.stage = new Konva.Stage({
-			container,
-			width: container.clientWidth,
-			height: container.clientHeight
-		});
-
-		this.gridLayer = new Konva.Layer();
-		this.connectionLayer = new Konva.Layer();
-		this.nodeLayer = new Konva.Layer();
-
-		this.gridGroup = new Konva.Group();
-		this.connectionGroup = new Konva.Group();
-		this.nodeGroup = new Konva.Group();
-
-		this.gridLayer.add(this.gridGroup);
-		this.connectionLayer.add(this.connectionGroup);
-		this.nodeLayer.add(this.nodeGroup);
-
-		this.stage.add(this.gridLayer, this.connectionLayer, this.nodeLayer);
-
-		this.panSurface = new Konva.Rect({
-			width: this.stage.width(),
-			height: this.stage.height(),
-			fill: '#0c0c0f',
-			listening: true
-		});
-		this.gridLayer.add(this.panSurface);
-		this.panSurface.moveToBottom();
-
-		this.stage.on('mousedown touchstart', (evt) => this.onPointerDown(evt));
-		this.stage.on('mouseup touchend mouseleave', () => this.finishPan());
-		this.stage.on('mousemove touchmove', () => this.onPointerMove());
-		this.stage.on('wheel', (evt) => this.onWheel(evt));
-
-		this.stage.on('click tap', (evt) => {
-			if (evt.target === this.stage || evt.target === this.panSurface) {
-				this.clearSelection();
-			}
-		});
-
-		this.resizeObserver = new ResizeObserver(() => this.onResize());
-		this.resizeObserver.observe(container);
-
-		this.renderViewport(this.viewport());
-	}
-
-	private onResize(): void {
-		if (!this.stage || !this.stageContainer) {
-			return;
-		}
-		const width = this.stageContainer.nativeElement.clientWidth;
-		const height = this.stageContainer.nativeElement.clientHeight;
-		this.stage.size({ width, height });
-		this.panSurface?.size({ width, height });
-		this.gridLayer?.batchDraw();
-	}
-
-	private onPointerDown(evt: Konva.KonvaEventObject<DragEvent>): void {
-		if (!this.stage || !this.panSurface) {
-			return;
-		}
-
-		const target = evt.target;
-		const isBackground = target === this.stage || target === this.panSurface;
-		if (!isBackground) {
-			return;
-		}
-
-		const pointer = this.stage.getPointerPosition();
-		if (!pointer) {
-			return;
-		}
-
-		this.isPanning = true;
-		this.panStart = pointer;
-		this.viewportStart = { ...this.state().viewport };
-	}
-
-	private onPointerMove(): void {
-		if (!this.isPanning || !this.stage || !this.panStart || !this.viewportStart) {
-			return;
-		}
-
-		const pointer = this.stage.getPointerPosition();
-		if (!pointer) {
-			return;
-		}
-
-		const dx = pointer.x - this.panStart.x;
-		const dy = pointer.y - this.panStart.y;
-		const newViewport: DiagramViewport = {
-			...this.viewportStart,
-			offsetX: this.viewportStart.offsetX + dx,
-			offsetY: this.viewportStart.offsetY + dy
-		};
-		this.updateViewport(newViewport);
-	}
-
-	private finishPan(): void {
-		if (this.isPanning) {
-			this.isPanning = false;
-			this.panStart = null;
-			this.viewportStart = null;
-			this.markDirty();
-		}
-	}
-
-	private onWheel(evt: Konva.KonvaEventObject<WheelEvent>): void {
-		if (!this.stage) {
-			return;
-		}
-		evt.evt.preventDefault();
-		const pointer = this.stage.getPointerPosition();
-		if (!pointer) {
-			return;
-		}
-		const scaleBy = 1.05;
-		const viewport = this.state().viewport;
-		const oldScale = viewport.zoom;
-		const mousePointTo = {
-			x: (pointer.x - viewport.offsetX) / oldScale,
-			y: (pointer.y - viewport.offsetY) / oldScale
-		};
-		const direction = evt.evt.deltaY > 0 ? -1 : 1;
-		const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-		const newViewport: DiagramViewport = {
-			...viewport,
-			zoom: Math.min(Math.max(newScale, 0.2), 2.5),
-			offsetX: pointer.x - mousePointTo.x * Math.min(Math.max(newScale, 0.2), 2.5),
-			offsetY: pointer.y - mousePointTo.y * Math.min(Math.max(newScale, 0.2), 2.5)
-		};
-		this.updateViewport(newViewport);
-		this.markDirty();
-	}
-
-	private updateViewport(viewport: DiagramViewport): void {
-		this.updateState({ viewport });
-	}
-
-	private markDirty(): void {
-		if (!this.state().isDirty) {
-			this.updateState({ isDirty: true });
-		}
-	}
-
-	private renderViewport(viewport: DiagramViewport): void {
-		if (!this.gridGroup || !this.connectionGroup || !this.nodeGroup) {
-			return;
-		}
-		[this.gridGroup, this.connectionGroup, this.nodeGroup].forEach((group) => {
-			group.position({ x: viewport.offsetX, y: viewport.offsetY });
-			group.scale({ x: viewport.zoom, y: viewport.zoom });
-		});
-		this.drawGrid(viewport.gridSize);
-	}
-
-	private renderNodes(nodes: DiagramNode[], selectedId: string | null, linkSourceId: string | null): void {
-		if (!this.nodeGroup) {
-			return;
-		}
-		this.nodeGroup.destroyChildren();
-		for (const node of nodes) {
-			// Removed debug log to keep console clean
-			const group = new Konva.Group({
-				x: node.x,
-				y: node.y,
-				draggable: true,
-				listening: true,
-				id: node.id
-			});
-
-			group.on('dragmove', () => this.previewConnectionsWhileDragging(node.id, group));
-			group.on('dragend', () => this.persistNodePosition(node.id, group));
-			group.on('click tap', (evt) => {
-				evt.cancelBubble = true;
-				if (linkSourceId && linkSourceId !== node.id) {
-					this.completeConnection(node.id);
-					return;
-				}
-				this.selectNode(node.id);
-			});
-
-			const palette = this.resolvePalette(node);
-			if (node.type === 'RECTANGLE') {
-				const width = node.width ?? DEFAULT_RECT.width;
-				const height = node.height ?? DEFAULT_RECT.height;
-				const rect = new Konva.Rect({
-					width,
-					height,
-					cornerRadius: 24,
-					fill: palette.fill,
-					stroke: selectedId === node.id ? palette.activeStroke : palette.stroke,
-					strokeWidth: 2,
-					offsetX: width / 2,
-					offsetY: height / 2
-				});
-				group.add(rect);
-			} else {
-				const radius = node.radius ?? DEFAULT_RADIUS;
-				const circle = new Konva.Circle({
-					radius,
-					fill: palette.fill,
-					stroke: selectedId === node.id ? palette.activeStroke : palette.stroke,
-					strokeWidth: 2
-				});
-				group.add(circle);
-			}
-
-			const textWidth = node.type === 'RECTANGLE' ? node.width ?? DEFAULT_RECT.width : (node.radius ?? DEFAULT_RADIUS) * 2;
-			const textHeight = node.type === 'RECTANGLE' ? node.height ?? DEFAULT_RECT.height : (node.radius ?? DEFAULT_RADIUS) * 2;
-			const label = new Konva.Text({
-				text: node.name || 'Sample text',
-				fontFamily: 'Space Grotesk, Inter, sans-serif',
-				fontSize: 18,
-				fontStyle: '600',
-				fill: palette.text,
-				width: textWidth,
-				height: textHeight,
-				align: 'center',
-				verticalAlign: 'middle',
-				offsetX: textWidth / 2,
-				offsetY: textHeight / 2,
-				listening: false
-			});
-			group.add(label);
-
-			this.nodeGroup.add(group);
-		}
-		this.nodeLayer?.batchDraw();
-	}
-
-	private renderConnections(nodes: DiagramNode[], connections: DiagramConnection[]): void {
-		if (!this.connectionGroup) {
-			return;
-		}
-		this.connectionGroup.destroyChildren();
-		const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
-
-		for (const connection of connections) {
-			const from = nodesById.get(connection.fromNodeId);
-			const to = nodesById.get(connection.toNodeId);
-			if (!from || !to) {
-				continue;
-			}
-			const bend = computeBendPoint(from, to);
-			const line = new Konva.Line({
-				points: [from.x, from.y, bend.x, bend.y, to.x, to.y],
-				stroke: '#f7d046',
-				strokeWidth: 3,
-				lineCap: 'round',
-				lineJoin: 'round'
-			});
-			this.connectionGroup.add(line);
-		}
-		this.connectionLayer?.batchDraw();
-	}
-
-	private drawGrid(gridSize: number): void {
-		if (!this.gridGroup) {
-			return;
-		}
-		if (this.currentGridSize === gridSize && this.gridGroup.getChildren().length) {
-			this.gridLayer?.batchDraw();
-			return;
-		}
-		this.currentGridSize = gridSize;
-		this.gridGroup.destroyChildren();
-		const range = 5000;
-		for (let x = -range; x <= range; x += gridSize) {
-			const line = new Konva.Line({
-				points: [x, -range, x, range],
-				stroke: x === 0 ? '#464646' : '#1f1f1f',
-				strokeWidth: x === 0 ? 1.6 : 0.6
-			});
-			this.gridGroup.add(line);
-		}
-		for (let y = -range; y <= range; y += gridSize) {
-			const line = new Konva.Line({
-				points: [-range, y, range, y],
-				stroke: y === 0 ? '#464646' : '#1f1f1f',
-				strokeWidth: y === 0 ? 1.6 : 0.6
-			});
-			this.gridGroup.add(line);
-		}
-		this.gridLayer?.batchDraw();
-	}
-
-	private safeRenderAll(): void {
-		try {
-			this.renderViewport(this.viewport());
-			this.renderNodes(this.nodes(), this.state().selectedNodeId, this.state().linkSourceId);
-			this.renderConnections(this.nodes(), this.connections());
-		} catch (error) {
-			console.error('[ProjectBoard] Initial render failed', error);
-		}
-	}
-
-	private addNode(type: DiagramNodeType, position: DiagramPoint): void {
-		const newNode: DiagramNode = {
-			id: this.generateId(),
-			type,
-			name: this.truncateNodeName('Sample text'),
-			description: '',
-			x: position.x,
-			y: position.y,
-			width: type === 'RECTANGLE' ? DEFAULT_RECT.width : undefined,
-			height: type === 'RECTANGLE' ? DEFAULT_RECT.height : undefined,
-			radius: type === 'CIRCLE' ? DEFAULT_RADIUS : undefined,
-			rotation: 0,
-			text: { value: 'Sample text' },
-			metadata: { palette: type }
-		};
-		this.state.update((current) => ({
-			...current,
-			nodes: [...current.nodes, newNode],
-			selectedNodeId: newNode.id,
-			sidebarMode: 'node',
-			isDirty: true
-		}));
+		this.store.selectNode(nodeId);
 	}
 
 	/** Redesenha as conexões do nó enquanto ele é arrastado, sem alterar o estado. */
-	private previewConnectionsWhileDragging(nodeId: string, group: Konva.Group): void {
-		const nodes = this.state().nodes.map((node) => (node.id === nodeId ? { ...node, x: group.x(), y: group.y() } : node));
-		this.renderConnections(nodes, this.state().connections);
+	private previewConnectionsWhileDragging(nodeId: string, x: number, y: number): void {
+		const nodes = this.store.nodes().map((node) => (node.id === nodeId ? { ...node, x, y } : node));
+		this.renderer?.renderConnections(nodes, this.store.connections());
 	}
 
-	private persistNodePosition(nodeId: string, group: Konva.Group): void {
-		this.state.update((current) => {
-			const nodes = current.nodes.map((node) => (node.id === nodeId ? { ...node, x: group.x(), y: group.y() } : node));
-			return {
-				...current,
-				nodes,
-				connections: recomputeBendPoints(current.connections, nodes, nodeId),
-				isDirty: true
-			};
-		});
+	private renderDiagram(nodes: DiagramNode[], connections: ReturnType<DiagramStore['connections']>, selectedId: string | null): void {
+		this.renderer?.renderNodes(nodes, selectedId);
+		this.renderer?.renderConnections(nodes, connections);
 	}
 
-	private completeConnection(targetNodeId: string): void {
-		const sourceId = this.state().linkSourceId;
-		if (!sourceId || sourceId === targetNodeId) {
-			return;
+	private safely(label: string, action: () => void): void {
+		try {
+			action();
+		} catch (error) {
+			console.error(`[ProjectBoard] Render failed (${label})`, error);
 		}
-		const nodes = this.state().nodes;
-		const source = nodes.find((n) => n.id === sourceId);
-		const target = nodes.find((n) => n.id === targetNodeId);
-		if (!source || !target) {
-			return;
-		}
-		const bendPoint = computeBendPoint(source, target);
-		const connection: DiagramConnection = {
-			id: this.generateId(),
-			fromNodeId: sourceId,
-			toNodeId: targetNodeId,
-			bendPoint,
-			style: { stroke: '#f7d046' }
-		};
-		this.state.update((current) => ({
-			...current,
-			connections: [...current.connections, connection],
-			linkSourceId: null,
-			isDirty: true
-		}));
-	}
-
-	private buildPayload(): SaveProjectDiagramPayload {
-		return {
-			project: {
-				name: this.state().projectName,
-				description: this.state().projectDescription
-			},
-			viewport: this.state().viewport,
-			nodes: this.state().nodes,
-			connections: this.state().connections
-		};
-	}
-
-	private truncateNodeName(value: string): string {
-		return (value ?? '').slice(0, NODE_NAME_MAX_LENGTH);
-	}
-
-	private resolvePalette(node: DiagramNode): { fill: string; stroke: string; activeStroke: string; text: string } {
-		return {
-			fill: '#0f1115',
-			stroke: '#393b46',
-			activeStroke: '#f7d046',
-			text: '#f3f3f3'
-		};
-	}
-
-	private clientToWorld(clientX: number, clientY: number): DiagramPoint {
-		const container = this.stageContainer?.nativeElement;
-		const viewport = this.state().viewport;
-		if (!container) {
-			return { x: 0, y: 0 };
-		}
-		const bounds = container.getBoundingClientRect();
-		const relativeX = clientX - bounds.left;
-		const relativeY = clientY - bounds.top;
-		const worldX = (relativeX - viewport.offsetX) / viewport.zoom;
-		const worldY = (relativeY - viewport.offsetY) / viewport.zoom;
-		return { x: worldX, y: worldY };
-	}
-
-	private generateId(): string {
-		const globalCrypto = globalThis.crypto;
-		if (globalCrypto?.randomUUID) {
-			return globalCrypto.randomUUID();
-		}
-		return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 	}
 }

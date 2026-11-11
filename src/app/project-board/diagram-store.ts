@@ -1,0 +1,237 @@
+import { Injectable, computed, signal } from '@angular/core';
+import { generateId } from '../shared/ids';
+import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
+import { DEFAULT_RADIUS, DEFAULT_RECT, DEFAULT_VIEWPORT, NODE_NAME_MAX_LENGTH } from './diagram-constants';
+import {
+	DiagramConnection,
+	DiagramNode,
+	DiagramNodeType,
+	DiagramPoint,
+	DiagramViewport,
+	ProjectBoardState,
+	ProjectDiagramResponse,
+	SaveProjectDiagramPayload
+} from './project-board.model';
+
+export function truncateNodeName(value: string): string {
+	return (value ?? '').slice(0, NODE_NAME_MAX_LENGTH);
+}
+
+function initialState(): ProjectBoardState {
+	return {
+		projectId: '',
+		projectName: '',
+		projectDescription: '',
+		viewport: { ...DEFAULT_VIEWPORT },
+		nodes: [],
+		connections: [],
+		selectedNodeId: null,
+		sidebarMode: 'catalog',
+		linkSourceId: null,
+		isDirty: false,
+		isSaving: false,
+		isDeleting: false,
+		isLoading: true,
+		statusMessage: null
+	};
+}
+
+/** Estado do diagrama aberto no board e as operações de edição sobre ele (sem Konva nem HTTP). */
+@Injectable()
+export class DiagramStore {
+	readonly state = signal<ProjectBoardState>(initialState());
+	private readonly statusError = signal(false);
+
+	readonly nodes = computed(() => this.state().nodes);
+	readonly connections = computed(() => this.state().connections);
+	readonly viewport = computed(() => this.state().viewport);
+	readonly selectedNode = computed(() => this.state().nodes.find((n) => n.id === this.state().selectedNodeId) ?? null);
+	readonly effectiveSidebarMode = computed(() => (this.state().selectedNodeId ? 'node' : this.state().sidebarMode));
+	readonly selectedConnections = computed(() => {
+		const selected = this.state().selectedNodeId;
+		if (!selected) {
+			return [];
+		}
+		return this.state().connections.filter((conn) => conn.fromNodeId === selected || conn.toNodeId === selected);
+	});
+	readonly linkModeActive = computed(() => Boolean(this.state().linkSourceId));
+	readonly isErrorStatus = computed(() => this.statusError() && Boolean(this.state().statusMessage));
+
+	patch(patch: Partial<ProjectBoardState>): void {
+		this.state.update((current) => ({ ...current, ...patch }));
+	}
+
+	/** Mensagem de status do header; `isError` pinta em vermelho. */
+	setStatus(message: string | null, isError = false, extra: Partial<ProjectBoardState> = {}): void {
+		this.statusError.set(isError);
+		this.patch({ ...extra, statusMessage: message });
+	}
+
+	hydrate(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
+		this.statusError.set(false);
+		this.state.set({
+			projectId: response.projectId,
+			projectName: response.projectName ?? 'Projeto sem nome',
+			projectDescription: response.projectDescription ?? '',
+			viewport: response.viewport ?? { ...DEFAULT_VIEWPORT },
+			nodes: (response.nodes ?? []).map((node) => ({ ...node, name: truncateNodeName(node.name ?? 'Sample text') })),
+			connections: response.connections ?? [],
+			selectedNodeId: null,
+			sidebarMode: 'catalog',
+			linkSourceId: null,
+			isDirty: markClean ? false : this.state().isDirty,
+			isSaving: false,
+			isDeleting: false,
+			isLoading: false,
+			statusMessage
+		});
+	}
+
+	buildPayload(): SaveProjectDiagramPayload {
+		const state = this.state();
+		return {
+			project: { name: state.projectName, description: state.projectDescription },
+			viewport: state.viewport,
+			nodes: state.nodes,
+			connections: state.connections
+		};
+	}
+
+	findInvalidNodeName(): DiagramNode | undefined {
+		return this.state().nodes.find((node) => (node.name ?? '').length > NODE_NAME_MAX_LENGTH);
+	}
+
+	setSidebarMode(mode: 'catalog' | 'project'): void {
+		this.patch({ sidebarMode: mode, selectedNodeId: mode === 'project' ? null : this.state().selectedNodeId });
+	}
+
+	selectNode(nodeId: string): void {
+		this.patch({ selectedNodeId: nodeId });
+	}
+
+	clearSelection(): void {
+		this.patch({ selectedNodeId: null, linkSourceId: null, sidebarMode: 'catalog' });
+	}
+
+	startLink(nodeId: string): void {
+		this.patch({ linkSourceId: nodeId });
+	}
+
+	cancelLink(): void {
+		this.patch({ linkSourceId: null });
+	}
+
+	markDirty(): void {
+		if (!this.state().isDirty) {
+			this.patch({ isDirty: true });
+		}
+	}
+
+	setViewport(viewport: DiagramViewport): void {
+		this.patch({ viewport });
+	}
+
+	setProjectName(value: string): void {
+		this.patch({ projectName: value.slice(0, 100), isDirty: true });
+	}
+
+	setProjectDescription(value: string): void {
+		this.patch({ projectDescription: value.slice(0, 10000), isDirty: true });
+	}
+
+	addNode(type: DiagramNodeType, position: DiagramPoint): DiagramNode {
+		const node: DiagramNode = {
+			id: generateId(),
+			type,
+			name: truncateNodeName('Sample text'),
+			description: '',
+			x: position.x,
+			y: position.y,
+			width: type === 'RECTANGLE' ? DEFAULT_RECT.width : undefined,
+			height: type === 'RECTANGLE' ? DEFAULT_RECT.height : undefined,
+			radius: type === 'CIRCLE' ? DEFAULT_RADIUS : undefined,
+			rotation: 0,
+			text: { value: 'Sample text' },
+			metadata: { palette: type }
+		};
+		this.state.update((current) => ({
+			...current,
+			nodes: [...current.nodes, node],
+			selectedNodeId: node.id,
+			sidebarMode: 'node',
+			isDirty: true
+		}));
+		return node;
+	}
+
+	updateSelectedNodeField(field: keyof DiagramNode, value: string | number): void {
+		const selected = this.state().selectedNodeId;
+		if (!selected) {
+			return;
+		}
+		const normalized = typeof value === 'number' ? value : field === 'name' ? truncateNodeName(value) : value;
+		this.state.update((current) => ({
+			...current,
+			nodes: current.nodes.map((node) => (node.id === selected ? ({ ...node, [field]: normalized } as DiagramNode) : node)),
+			isDirty: true
+		}));
+	}
+
+	/** Move o nó e recalcula o ponto de dobra das conexões ligadas a ele. */
+	moveNode(nodeId: string, x: number, y: number): void {
+		this.state.update((current) => {
+			const nodes = current.nodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node));
+			return { ...current, nodes, connections: recomputeBendPoints(current.connections, nodes, nodeId), isDirty: true };
+		});
+	}
+
+	deleteNode(nodeId: string): void {
+		this.state.update((current) => ({
+			...current,
+			nodes: current.nodes.filter((node) => node.id !== nodeId),
+			connections: current.connections.filter((conn) => conn.fromNodeId !== nodeId && conn.toNodeId !== nodeId),
+			selectedNodeId: current.selectedNodeId === nodeId ? null : current.selectedNodeId,
+			linkSourceId: current.linkSourceId === nodeId ? null : current.linkSourceId,
+			isDirty: true
+		}));
+	}
+
+	deleteConnection(connectionId: string): void {
+		this.state.update((current) => ({
+			...current,
+			connections: current.connections.filter((conn) => conn.id !== connectionId),
+			isDirty: true
+		}));
+	}
+
+	/** Conclui a conexão iniciada em `linkSourceId` até o nó alvo. */
+	completeConnection(targetNodeId: string): void {
+		const sourceId = this.state().linkSourceId;
+		if (!sourceId || sourceId === targetNodeId) {
+			return;
+		}
+		const nodes = this.state().nodes;
+		const source = nodes.find((n) => n.id === sourceId);
+		const target = nodes.find((n) => n.id === targetNodeId);
+		if (!source || !target) {
+			return;
+		}
+		const connection: DiagramConnection = {
+			id: generateId(),
+			fromNodeId: sourceId,
+			toNodeId: targetNodeId,
+			bendPoint: computeBendPoint(source, target),
+			style: { stroke: '#f7d046' }
+		};
+		this.state.update((current) => ({
+			...current,
+			connections: [...current.connections, connection],
+			linkSourceId: null,
+			isDirty: true
+		}));
+	}
+
+	resolveNodeLabel(nodeId: string): string {
+		return this.state().nodes.find((candidate) => candidate.id === nodeId)?.name ?? 'Sample text';
+	}
+}
