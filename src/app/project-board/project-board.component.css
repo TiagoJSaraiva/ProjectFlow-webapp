@@ -350,3 +350,14 @@ button:hover:not(:disabled) {
 		transform: rotate(360deg);
 	}
 }
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #9a9a9a;
+}
+
+.field-hint.limit {
+  color: #f7d046;
+}

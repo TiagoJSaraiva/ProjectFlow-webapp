@@ -18,6 +18,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import Konva from 'konva';
 import { Subject, takeUntil } from 'rxjs';
 import { DiagramConnection, DiagramNode, DiagramNodeType, DiagramPoint, DiagramViewport, ProjectBoardState, ProjectDiagramResponse, SaveProjectDiagramPayload } from './project-board.model';
+import { computeBendPoint, recomputeBendPoints } from './connection-geometry';
 import { getApiErrorMessage } from '../shared/api-error';
 import { ProjectSyncService } from '../projects/project-sync.service';
 import { ProjectBoardService } from './project-board.service';
@@ -69,6 +70,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		return this.state().connections.filter((conn) => conn.fromNodeId === selected || conn.toNodeId === selected);
 	});
 	readonly linkModeActive = computed(() => Boolean(this.state().linkSourceId));
+	private readonly statusIsError = signal(false);
 	readonly deleteDialogOpen = signal(false);
 	readonly unsavedDialogOpen = signal(false);
 	readonly reloadDialogOpen = signal(false);
@@ -328,8 +330,15 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 	}
 
 	isErrorStatus(): boolean {
-		const normalized = this.state().statusMessage?.toLowerCase();
-		return Boolean(normalized && normalized.includes('não'));
+		return this.statusIsError() && Boolean(this.state().statusMessage);
+	}
+
+	readonly nodeNameMaxLength = NODE_NAME_MAX_LENGTH;
+
+	/** Registra uma falha no status do header (em vermelho). */
+	private fail(patch: Partial<ProjectBoardState>): void {
+		this.statusIsError.set(true);
+		this.updateState(patch);
 	}
 
 	updateNodeField(field: keyof DiagramNode, value: string | number): void {
@@ -367,6 +376,15 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		if (!this.state().projectId || this.state().isSaving) {
 			return;
 		}
+		const invalidNode = this.state().nodes.find((node) => (node.name ?? '').length > NODE_NAME_MAX_LENGTH);
+		if (invalidNode) {
+			this.fail({
+				statusMessage: `O nome do nó "${invalidNode.name.slice(0, 20)}..." excede o limite de ${NODE_NAME_MAX_LENGTH} caracteres.`
+			});
+			onError?.();
+			return;
+		}
+		this.statusIsError.set(false);
 		this.updateState({ isSaving: true, statusMessage: 'Salvando alterações...' });
 		const payload = this.buildPayload();
 		this.boardService
@@ -374,12 +392,27 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.pipe(takeUntil(this.destroy$))
 			.subscribe({
 				next: (response) => {
+					// Só confirma o sucesso quando o servidor devolve o que foi enviado.
+					const confirmed =
+						response?.projectId === this.state().projectId &&
+						(response.projectName ?? '') === payload.project.name &&
+						(response.projectDescription ?? '') === payload.project.description;
+					if (!confirmed) {
+						// Mantém as edições locais; nada é dado como salvo.
+						this.fail({
+							isSaving: false,
+							isDirty: true,
+							statusMessage: 'O servidor não confirmou o nome/descrição do projeto. Tente salvar novamente.'
+						});
+						onError?.();
+						return;
+					}
 					this.hydrateState(response, true, 'Diagrama salvo com sucesso.');
 					this.announceProjectSnapshot(response, 'save');
 					afterSave?.();
 				},
 				error: (error: unknown) => {
-					this.updateState({
+					this.fail({
 						isSaving: false,
 						statusMessage: getApiErrorMessage(error, 'Não foi possível salvar o projeto. Tente novamente.')
 					});
@@ -417,7 +450,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			.subscribe({
 				next: () => this.router.navigateByUrl('/'),
 				error: (error: unknown) =>
-					this.updateState({ isDeleting: false, statusMessage: getApiErrorMessage(error, 'Não foi possível apagar o projeto.') })
+					this.fail({ isDeleting: false, statusMessage: getApiErrorMessage(error, 'Não foi possível apagar o projeto.') })
 			});
 	}
 
@@ -532,11 +565,12 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 					this.announceProjectSnapshot(response, 'load');
 				},
 				error: (error: unknown) =>
-					this.updateState({ isLoading: false, statusMessage: getApiErrorMessage(error, 'Não foi possível carregar o projeto.') })
+					this.fail({ isLoading: false, statusMessage: getApiErrorMessage(error, 'Não foi possível carregar o projeto.') })
 			});
 	}
 
 	private hydrateState(response: ProjectDiagramResponse, markClean: boolean, statusMessage: string | null): void {
+		this.statusIsError.set(false);
 		const sanitizedNodes = (response.nodes ?? []).map((node) => ({
 			...node,
 			name: this.truncateNodeName(node.name ?? 'Sample text')
@@ -754,6 +788,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 				id: node.id
 			});
 
+			group.on('dragmove', () => this.previewConnectionsWhileDragging(node.id, group));
 			group.on('dragend', () => this.persistNodePosition(node.id, group));
 			group.on('click tap', (evt) => {
 				evt.cancelBubble = true;
@@ -826,7 +861,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			if (!from || !to) {
 				continue;
 			}
-			const bend = connection.bendPoint ?? this.computeBendPoint(from, to);
+			const bend = computeBendPoint(from, to);
 			const line = new Konva.Line({
 				points: [from.x, from.y, bend.x, bend.y, to.x, to.y],
 				stroke: '#f7d046',
@@ -903,12 +938,22 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		}));
 	}
 
+	/** Redesenha as conexões do nó enquanto ele é arrastado, sem alterar o estado. */
+	private previewConnectionsWhileDragging(nodeId: string, group: Konva.Group): void {
+		const nodes = this.state().nodes.map((node) => (node.id === nodeId ? { ...node, x: group.x(), y: group.y() } : node));
+		this.renderConnections(nodes, this.state().connections);
+	}
+
 	private persistNodePosition(nodeId: string, group: Konva.Group): void {
-		this.state.update((current) => ({
-			...current,
-			nodes: current.nodes.map((node) => (node.id === nodeId ? { ...node, x: group.x(), y: group.y() } : node)),
-			isDirty: true
-		}));
+		this.state.update((current) => {
+			const nodes = current.nodes.map((node) => (node.id === nodeId ? { ...node, x: group.x(), y: group.y() } : node));
+			return {
+				...current,
+				nodes,
+				connections: recomputeBendPoints(current.connections, nodes, nodeId),
+				isDirty: true
+			};
+		});
 	}
 
 	private completeConnection(targetNodeId: string): void {
@@ -922,7 +967,7 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 		if (!source || !target) {
 			return;
 		}
-		const bendPoint = this.computeBendPoint(source, target);
+		const bendPoint = computeBendPoint(source, target);
 		const connection: DiagramConnection = {
 			id: this.generateId(),
 			fromNodeId: sourceId,
@@ -936,14 +981,6 @@ export class ProjectBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 			linkSourceId: null,
 			isDirty: true
 		}));
-	}
-
-	private computeBendPoint(source: DiagramNode, target: DiagramNode): DiagramPoint {
-		const horizontalFirst = Math.abs(target.x - source.x) > Math.abs(target.y - source.y);
-		if (horizontalFirst) {
-			return { x: target.x, y: source.y };
-		}
-		return { x: source.x, y: target.y };
 	}
 
 	private buildPayload(): SaveProjectDiagramPayload {

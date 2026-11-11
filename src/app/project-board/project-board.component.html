@@ -79,7 +79,10 @@
           <h3>Elemento selecionado</h3>
           <label>
             <span>Título</span>
-            <input type="text" maxlength="35" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" />
+            <input type="text" [attr.maxlength]="nodeNameMaxLength" [ngModel]="node.name" (ngModelChange)="updateNodeField('name', $event)" aria-describedby="node-name-hint" />
+            <small id="node-name-hint" class="field-hint" [class.limit]="node.name.length >= nodeNameMaxLength">
+              {{ node.name.length >= nodeNameMaxLength ? 'Limite de ' + nodeNameMaxLength + ' caracteres atingido.' : node.name.length + '/' + nodeNameMaxLength }}
+            </small>
           </label>
           <label>
             <span>Descrição</span>
